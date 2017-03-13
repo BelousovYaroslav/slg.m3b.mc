@@ -1276,7 +1276,8 @@ void main() {
   signed short ssh_dU;
   char cChkSm;
 
-  double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
+  double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
+
   float Coeff;
 
   double dbl_dN, dbl_dU;
@@ -2532,10 +2533,11 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        /*if( ADCChannel == 2) ADCChannel=8;
+        if( ADCChannel == 2) ADCChannel=8;
         else if( ADCChannel == 8) ADCChannel=4;
-        else*/
+        else
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
+
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
         //pause( 10);
@@ -2628,30 +2630,29 @@ void main() {
 
           if( gl_nMeanDecCoeffCounter > 0) {
 
-            gl_dblMeanAbsDn = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDn + dbl_dN) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
-            gl_dblMeanAbsDu = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDu + dbl_dU) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
-
-            dbl_N1 = ( double) gl_ssh_angle_inc_prev;
-            dbl_N2 = ( double) gl_ssh_angle_inc;
-            dbl_U1  = ( double) gl_ssh_angle_hanger_prev;
+            dbl_N1 = ( double) gl_ssh_angle_inc_prev;
+            dbl_N2 = ( double) gl_ssh_angle_inc;
+            dbl_U1  = ( double) gl_ssh_angle_hanger_prev;
             dbl_U2  = ( double) gl_ssh_angle_hanger;
-
             Coeff = (( float) flashParamDecCoeff) / 65535.;
-
-            gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
+
+            gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
+
             if( fabs( gl_dbl_Omega) < 5) {
+              gl_dblMeanAbsDn = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDn + dbl_dN) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
+              gl_dblMeanAbsDu = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDu + dbl_dU) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
 
-              if( ++gl_nMeanDecCoeffCounter > 10000)
-              gl_nMeanDecCoeffCounter = 10000;
+              if( ++gl_nMeanDecCoeffCounter > 10000) {
+                gl_nMeanDecCoeffCounter = 10000;
 
-              if( (( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL)) % T2LD >= 32768) {
-                gl_un_PrevT2DecCoeffCalc = T2VAL;
+                if( (( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL)) % T2LD >= 32768) {
+                  gl_un_PrevT2DecCoeffCalc = T2VAL;
 
-                flashParamDecCoeff = ( short) ( ( int) ( gl_dblMeanAbsDn / gl_dblMeanAbsDu * 65535.));
-                nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+                  flashParamDecCoeff = ( short) ( ( int) ( gl_dblMeanAbsDn / gl_dblMeanAbsDu * 65535.));
+                  nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+                }
               }
             }
-
           }
           else {
             gl_dblMeanAbsDn = dbl_dN;
