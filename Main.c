@@ -2137,7 +2137,6 @@ void main() {
 
 
 
-
     //наёбочная часть - эмуляция такта 10(5?) раз в секунду
     prt2val = T2VAL;
     while( (( 0x1000 + T2VAL - prt2val) % 0x1000) < 3276);
@@ -2163,9 +2162,9 @@ void main() {
 
         //запрашиваем старший байт кода счётчика информационных импульсов
         //GP1SET = 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY1
-		    GP1DAT |= 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY2
+        GP1DAT |= 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY2
 
-        pause( 1);                //пауза
+        //pause( 1);                //пауза
 
         //чтение
         hb = (( GP1DAT & BIT_5) >> 5) +
@@ -2178,14 +2177,14 @@ void main() {
              ((( GP0DAT & BIT_2) >> 2) << 7);
 
         //GP1CLR = 1 << (16 + 3);  //RDHBC (p1.3) = 0				WAY1
-		    GP1DAT &= ~( 1 << (16 + 3));  //RDHBC (p1.3) = 0			WAY2
+        GP1DAT &= ~( 1 << (16 + 3));  //RDHBC (p1.3) = 0			WAY2
 
 
         //запрашиваем младший байт кода счётчика информационных импульсов
         //GP1SET = 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY1
 		    GP1DAT |= 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY2
 
-        pause( 1);                //пауза
+        //pause( 1);                //пауза
 
         lb = (( GP1DAT & BIT_5) >> 5) +
              ((( GP0DAT & BIT_7) >> 7) << 1) +
@@ -2221,7 +2220,7 @@ void main() {
 
             //запрашиваем старший байт угла поворота вибратора
             GP0SET = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 1
-            pause( 1);                //пауза
+            //pause( 1);                //пауза
 
             //чтение
             hb =  (( GP1DAT & BIT_5) >> 5) +
@@ -2238,7 +2237,7 @@ void main() {
 
             //запрашиваем младший байт кода счётчика информационных импульсов
             GP2SET = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 1
-            pause( 1);                //пауза
+            //pause( 1);                //пауза
 
             lb = (( GP1DAT & BIT_5) >> 5) +
                   ((( GP0DAT & BIT_7) >> 7) << 1) +
@@ -2377,7 +2376,7 @@ void main() {
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
-        pause( 10);
+        //pause( 10);
         ADCCON |= 0x80;                  //запуск нового преобразования (съем будет в следующем такте SA)
 
 
@@ -2393,7 +2392,7 @@ void main() {
 
         //запрашиваем среднее за период частотной подставки
         GP3DAT |= 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 1
-        pause( 1);                //пауза
+        //pause( 1);                //пауза
 
         //чтение
         hb = (( GP1DAT & BIT_5) >> 5) +
@@ -2437,7 +2436,7 @@ void main() {
           case 13: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 13, flashParamAmplAngMin1);  break;  //flashParamAmplAngMin1
           case 14: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 14, flashParamDecCoeff);     break;  //flashParamDecCoeff
           case 15: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 15, flashParamSignCoeff);    break;  //flashParamSignCoeff
-          case 16: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 16, (VERSION_MINOR * 16 << 12) + VERSION_MAJOR * 16 + VERSION_MIDDLE);    break;               //SOFTWARE VERSION
+          case 16: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 16, ( ( VERSION_MINOR * 16) << 8) + ( VERSION_MAJOR * 16 + VERSION_MIDDLE));    break;               //SOFTWARE VERSION
           case 17: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 17, flashParam_calibT1);     break;  //min thermo-calib point T
           case 18: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 18, flashParamT1_TD1_val);   break;  //min thermo-calib point thermo1 data
           case 19: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 19, flashParamT1_TD2_val);   break;  //min thermo-calib point thermo2 data
@@ -2502,7 +2501,7 @@ void main() {
 
           ADCChannel = 0;     //запускаем измерения с UTD3
           ADCCP = ADCChannel;
-          pause( 10);
+          //pause( 10);
           ADCCON |= 0x80;
         }
         else
@@ -2578,7 +2577,7 @@ void main() {
 
         //В тестовых целях делаем сигнал на линии P0.0
         GP0DAT |= 1 << ( 16);	//тестовая линия p0.0 set
-        for( i=0; i<100; i++);
+        //for( i=0; i<100; i++);
         GP0DAT &= ~( 1 << ( 16));	//тестовая линия p0.0 clear      
       }
 /*
