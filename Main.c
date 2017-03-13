@@ -2522,10 +2522,9 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        /*
         if( ADCChannel == 2) ADCChannel=8;
         else if( ADCChannel == 8) ADCChannel=4;
-        else*/
+        else
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
@@ -2609,7 +2608,6 @@ void main() {
           case 23: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 23, gl_ushFlashParamLastRULA); break;//flashParamPhaseShift);   break;  //phase shift
         }
 
-        /*
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
         if( gl_b_SyncMode) {
 
@@ -2625,14 +2623,17 @@ void main() {
             gl_dbl_Usumm += fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
             gl_un_DecCoeffStatPoints++;
             if( !( gl_un_DecCoeffStatPoints % DEC_COEFF_CONTINUOUS_CALCULATION_N)) {
-              flashParamDecCoeff = ( short) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.);
+              //flashParamDecCoeff = ( short) ( ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
+              flashParamDecCoeff = ( short) ( ( int) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
+
+
               gl_dbl_Nsumm = gl_dbl_Usumm = 0.;
               gl_un_DecCoeffStatPoints = 0;
               nSentPacksRound = LONG_OUTPUT_PACK_LEN;
             }
           }
         }
-        */
+
 
         #ifdef DEBUG
           printf( "%d     %d     %d      %.2fV\n", gl_ssh_angle_inc, gl_ssh_angle_inc - gl_ssh_angle_inc_prev, gl_ssh_angle_hanger- gl_ssh_angle_hanger_prev, ( double) gl_ssh_angle_hanger * 0.61 / 1000.);
