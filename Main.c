@@ -82,7 +82,7 @@ double dMeaningSumm = 0.;
 double dMeanImps = 0.;
 int nT2RepeatBang;
 
-char gl_b_PerimeterReset = 0;
+char gl_n_PerimeterReset = 0;         //0 - рабочий режим   1 - выключили интегратор   2 - интегратор включили
 char gl_c_EmergencyCode = 0;
 char gl_b_SA_Processed = 0;	          //флаг окончания обработки сигнала SA
 char gl_b_SyncMode = 0;               //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
@@ -318,9 +318,8 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
   //***************************************************************************
   //ANALOG PARAMETER INDICATOR
   //***************************************************************************
-  putchar_nocheck( ( gl_b_PerimeterReset ? 0x80 : 0x00) + param_indicator & 0xff);
-  gl_b_PerimeterReset = 0;
-  cCheckSumm += (( gl_b_PerimeterReset ? 0x80 : 0x00) + param_indicator & 0xff);
+  putchar_nocheck( ( ( gl_n_PerimeterReset > 0) ? 0x80 : 0x00) + param_indicator & 0xff);
+  cCheckSumm += (( ( gl_n_PerimeterReset > 0) ? 0x80 : 0x00) + param_indicator & 0xff);
 
   //***************************************************************************
   //ANALOG PARAMETER
@@ -395,7 +394,7 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
   /*
   printf("(0x55 0xAA)   (0x%02x 0x%02x 0x%02x 0x%02x)   (0x%02x)   (0x?? 0x??)   (0x?? 0x??)  (0x%02x)   (0x%02x)   (0x??)\n",
           b1, b2, b3, b4,
-          ( gl_b_PerimeterReset ? 0x80 : 0x00) + param_indicator & 0xff,
+          ( ( gl_n_PerimeterReset > 0) ? 0x80 : 0x00) + param_indicator & 0xff,
           gl_c_OutPackCounter++,
           gl_c_EmergencyCode
           );
@@ -2102,10 +2101,10 @@ void main() {
         case 3: //установить начальную моду
           flashParamStartMode = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
           DACConfiguration();
-          GP0DAT |= ( 1 << (16 + 5));	  //RP_P   (p0.5) = 1
+          GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
+          gl_n_PerimeterReset = 1;
           nRppTimer = T1VAL;
           nSentPacksRound = LONG_OUTPUT_PACK_LEN;
-          //gl_b_PerimeterReset = 1;
         break;
         
         case 4: //установить минимальный ток I1
@@ -2211,6 +2210,24 @@ void main() {
         case 15:    //команда выключения лазера
           GP4DAT |= 1 << (16 + 0);      //ONHV       (p4.0) = 1
           GP4DAT |= 1 << (16 + 1);      //OFF3KV     (p4.1) = 1
+        break;
+
+        case 16:    //команда выключения интегратора
+          GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
+          nRppTimer = 0;
+          gl_n_PerimeterReset = 1;
+        break;
+
+        case 17:    //команда включения интегратора
+          GP0DAT &= ~( 1 << (16 + 5));  //RP_P   (p0.5) = 0
+          nRppTimer = T1VAL;
+          gl_n_PerimeterReset = 2;
+        break;
+
+        case 18:    //команда ресета интегратора
+          GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
+          nRppTimer = T1VAL;
+          gl_n_PerimeterReset = 1;
         break;
 
         case 49: //запрос параметров
@@ -2631,13 +2648,13 @@ void main() {
         // ************************************************************************************
         if( nSentPacksCounter == 5) {
           V_piezo = (( gl_ssh_Perim_Voltage / 4095. * 2.5) - 1.23) * 101.;
-          if( fabs( V_piezo) > 80.) {
-            flashParamStartMode = 125;
-            DACConfiguration();
+          if( fabs( V_piezo) > 100.) {
+            //flashParamStartMode = 125;
+            //DACConfiguration();
             GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
             nRppTimer = T1VAL;
+            gl_n_PerimeterReset = 1;
             nSentPacksRound = LONG_OUTPUT_PACK_LEN;
-            gl_b_PerimeterReset = 1;
           }
         }
 
@@ -2711,11 +2728,32 @@ void main() {
         //обработка флага сброса RP_P
         //**********************************************************************
         if( nRppTimer != 0) {
-          if( (( T1LD + nRppTimer - T1VAL) % T1LD) > 327) {
-            //сброс интеграторов в системе регулировки периметра
-            GP0DAT &= ~( 1 << (16 + 5));	//RP_P   (p0.5) = 0
-            nRppTimer = 0;
+
+          if( gl_n_PerimeterReset == 1) {
+
+            //32768 = 1 sec
+            //3276  = 0.1 sec    = 100 msec
+            //327   = 0.01 sec   = 10 msec
+            //32    = 0.001 sec  = 1 msec
+            if( (( T1LD + nRppTimer - T1VAL) % T1LD) > 32) {
+
+              //сброс (включение) интеграторов в системе регулировки периметра
+              GP0DAT &= ~( 1 << (16 + 5));  //RP_P   (p0.5) = 0
+              nRppTimer = T1VAL;
+              gl_n_PerimeterReset = 2;
+            }
           }
+          else if( gl_n_PerimeterReset == 2) {
+
+            //32768 = 1 sec
+            //3276  = 0.1 sec = 100 msec
+            //327   = 0.01 sec = 10 msec
+            if( (( T1LD + nRppTimer - T1VAL) % T1LD) > 3276) {
+              gl_n_PerimeterReset = 0;
+              nRppTimer = 0;
+            }
+          }
+
         }
 
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали
