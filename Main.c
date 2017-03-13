@@ -201,6 +201,26 @@ void PrintHexShortNumber( short n) {
   putchar( gl_c_numbers[(n & 0xf)]);
 }
 
+void PrintBinShortNumber( short n) {
+  putchar( ( n & 0x8000) ? '1' : '0');
+  putchar( ( n & 0x4000) ? '1' : '0');
+  putchar( ( n & 0x2000) ? '1' : '0');
+  putchar( ( n & 0x1000) ? '1' : '0');
+  putchar( ( n & 0x0800) ? '1' : '0');
+  putchar( ( n & 0x0400) ? '1' : '0');
+  putchar( ( n & 0x0200) ? '1' : '0');
+  putchar( ( n & 0x0100) ? '1' : '0');
+  putchar( ' ');
+  putchar( ( n & 0x80) ? '1' : '0');
+  putchar( ( n & 0x40) ? '1' : '0');
+  putchar( ( n & 0x20) ? '1' : '0');
+  putchar( ( n & 0x10) ? '1' : '0');
+  putchar( ( n & 0x08) ? '1' : '0');
+  putchar( ( n & 0x04) ? '1' : '0');
+  putchar( ( n & 0x02) ? '1' : '0');
+  putchar( ( n & 0x01) ? '1' : '0');
+}
+
 void PrintHexCharNumber( char n) {
   putchar( gl_c_numbers[((n & 0xf0) >> 4)]);
   putchar( gl_c_numbers[(n & 0xf)]);
@@ -424,12 +444,14 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
   b3 = pntr[2];
   b4 = pntr[3];
 
+  /*
   printf("(0x55 0xAA)   (0x%02x 0x%02x 0x%02x 0x%02x)   (0x%02x)   (0x?? 0x??)   (0x?? 0x??)  (0x%02x)   (0x%02x)   (0x??)\n",
           b1, b2, b3, b4,
           ( gl_b_PerimeterReset ? 0x80 : 0x00) + param_indicator & 0xff,
           gl_c_OutPackCounter++,
           gl_c_EmergencyCode
           );
+  */
 #endif
 }
 
@@ -787,9 +809,11 @@ void configure_hanger( void) {
 }
 
 void DACConfiguration( void) {
+/*
 #ifdef DEBUG
   printf("DEBUG: DACConfiguration(): enter\n");
 #endif
+*/
   //**********************************************************************
   // выставка ÷јѕов
   //**********************************************************************
@@ -1543,10 +1567,10 @@ void main() {
 #ifdef DEBUG
   printf("T7-SLG. Software version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MIDDLE, VERSION_MINOR);
   printf("DEBUG MODE\n");
-  gl_sn_MeaningCounterRound = LONG_OUTPUT_PACK_LEN;
-  printf("LONG_PACK: %d\n", gl_sn_MeaningCounterRound);
-  gl_sn_MeaningCounterRound = SHORT_OUTPUT_PACK_LEN;
-  printf("SHORT_PACK: %d\n", gl_sn_MeaningCounterRound);
+  i = LONG_OUTPUT_PACK_LEN;
+  printf("LONG_PACK: %d\n", i);
+  i = SHORT_OUTPUT_PACK_LEN;
+  printf("SHORT_PACK: %d\n", i);
 #endif
 
   /*
@@ -2314,10 +2338,11 @@ void main() {
 
     //if( bSAFake) {	// на ноге SA_TA (P0.4) есть FAKE сигнал
     if( GP0DAT & 0x10) {	//на ноге SA_TA (P0.4) есть сигнал
-
+      /*
       #ifdef DEBUG
         printf("DEBUG: got tact synchro signal! %d\n", gl_b_SA_Processed);
       #endif
+      */
       if( gl_b_SA_Processed == 0) { //если в этом SA цикле мы его еще не обрабатывали
 
         //отсечка получени€ TA_SA (дл€ вычислени€ длительности)
@@ -2369,6 +2394,14 @@ void main() {
 
         //складываем два байта
         gl_ssh_angle_inc = lb + (hb << 8);
+        #ifdef DEBUG
+          PrintBinShortNumber(hb);
+          printf(" ");
+          PrintBinShortNumber(lb);
+          printf(" ");
+          PrintBinShortNumber( gl_ssh_angle_inc);
+          printf(" ");
+        #endif
 
 
 
@@ -2412,8 +2445,20 @@ void main() {
             GP2CLR = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 0
 
             //складываем два байта
+            gl_ssh_angle_hanger_prev = gl_ssh_angle_hanger;
             gl_ssh_angle_hanger = lb + (hb << 8);
 
+            if( gl_ssh_angle_hanger & 0x2000) {
+              gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF) | 0xC000;
+            }
+            else
+              gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF);
+
+            /*
+            #ifdef DEBUG
+              printf("DEBUG: gl_ssh_angle_hanger = %.2f V\n", ( double) ( gl_ssh_angle_hanger) * 0.61 / 1000.);
+            #endif
+            */
         }
 
         //**********************************************************************
@@ -2456,6 +2501,7 @@ void main() {
           case 4: gl_ssh_current_2 = (ADCDAT >> 16); break;     //I2
           case 5: gl_ssh_Perim_Voltage = (ADCDAT >> 16); break; //CntrPc
           case 6: gl_ssh_ampl_angle = (ADCDAT >> 16); break;    //AmplAng
+          case 8: gl_ssh_current_1 = (ADCDAT >> 16); break;     //I1   TEMP!!!!!!!!!!!!!!!!!!!!
         }
 
         if( bCalibProcessState) {
@@ -2518,7 +2564,10 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измер€емых аналог. параметров
+        if( ADCChannel == 2) ADCChannel=8;
+        else if( ADCChannel == 8) ADCChannel=4;
+        else
+          ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измер€емых аналог. параметров
 
         ADCCP = ADCChannel;              //выставл€ем новый канал ј÷ѕ
         pause( 10);
@@ -2555,10 +2604,11 @@ void main() {
         gl_ush_MeanImpulses = hb;
         CircleBufferAmplForT_add( gl_ush_MeanImpulses);
 
+        /*
         #ifdef DEBUG
           printf("DEBUG: Ampl: %d Mean: %.2f\n", gl_ush_MeanImpulses, gl_dblCircleBufferMean);
         #endif
-
+        */
 
         //**********************************************************************
         // ¬ыдача данных согласно протоколу
@@ -2613,6 +2663,11 @@ void main() {
             }
           }
         }
+
+
+        #ifdef DEBUG
+          printf( "%d     %d     %d      %.2fV\n", gl_ssh_angle_inc, gl_ssh_angle_inc - gl_ssh_angle_inc_prev, gl_ssh_angle_hanger- gl_ssh_angle_hanger_prev, ( double) gl_ssh_angle_hanger * 0.61 / 1000.);
+        #endif
 
         gl_ssh_angle_inc_prev = gl_ssh_angle_inc;
 
@@ -2693,9 +2748,11 @@ void main() {
         for( i=0; i<100; i++);
         GP0DAT &= ~( 1 << ( 16));	//тестова€ лини€ p0.0 clear      
       }
+/*
 #ifdef DEBUG
   printf("DEBUG: Main loop ends... %d %d \n", nSentPacksCounter, gl_b_SA_Processed);
 #endif
+*/
     }
     else {
       //если лини€ сигнала SA в низком уровне - то как только она подниметс€ начнетс€ новый необработанный такт
