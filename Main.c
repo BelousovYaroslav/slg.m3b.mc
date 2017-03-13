@@ -65,25 +65,13 @@ unsigned short gl_ush_MeanImpulses = 1;
 //unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V
 unsigned int gl_un_RULAControl = 4095;    //4095 = 2.500 V
 
-//unsigned char delta = ( RULA_MAX - RULA_MIN) / 2;
-unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 2;
+//unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 2;
 
-#define MEANING_IMP_PERIOD_100 100
-#define MEANING_IMP_PERIOD_200 200
-#define MEANING_IMP_PERIOD_300 300
-#define MEANING_IMP_PERIOD_400 400
-#define MEANING_IMP_PERIOD_500 500
-#define MEANING_IMP_PERIOD_STABLE 1000
-
-int gl_sn_MeaningCounter = 0;
-int gl_sn_MeaningCounterRound = 500;
-double dMeaningSumm = 0.;
-double dMeanImps = 0.;
 int nT2RepeatBang;
 
 char gl_b_PerimeterReset = 0;
 char gl_c_EmergencyCode = 0;
-char gl_b_SA_Processed = 0;	          //флаг окончания обработки сигнала SA
+char gl_b_SA_Processed = 0;           //флаг окончания обработки сигнала SA
 char gl_b_SyncMode = 0;               //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
 char bAsyncDu = 0;                    //флаг передачи времени SA или приращ. угла в асинхр. режиме: 0-передается SA 1-передается dU
 
@@ -128,8 +116,6 @@ unsigned short flashParamPhaseShift = 0;
 unsigned short gl_ushFlashParamLastRULA = 0;
 unsigned short gl_ushFlashParamLastRULM = 0;
 
-int gl_nSaveRulaRulm = 0;
-
 double dStartAmplAngCheck = 0.5;
 
 unsigned short nFiringTry = 0;
@@ -150,19 +136,37 @@ double TD2_K, TD2_B;
 
 int gl_nAppliedMCoeff;
 
-#define AMPLFORT_ROUND_BUFLEN 100
+#define AMPLFORT_ROUND_BUFLEN 200
 unsigned short gl_ushCircleBufferAmplForT[ AMPLFORT_ROUND_BUFLEN];
 int gl_nCircleBufferAmplForTPositon = 0;
 char gl_bCircleBufferAmplForTOverRound = 0;
+double gl_dblCircleBufferSumm = 0.;
+double gl_dblCircleBufferMean = 0.;
+
+int gl_nAmplAverageCounter = 0;
+double gl_dblAmplAverage = 0.;
+unsigned short gl_ushMeanImpulses_prev = 0;
+
+#define MAX_AMPL_AVG_COUNTER 4650
+
 
 void CircleBufferAmplForT_add( unsigned short newVal) {
+  gl_dblCircleBufferSumm -= gl_ushCircleBufferAmplForT[ gl_nCircleBufferAmplForTPositon];
+  gl_dblCircleBufferSumm += newVal;
+
   gl_ushCircleBufferAmplForT[ gl_nCircleBufferAmplForTPositon] = newVal;
   if( ++gl_nCircleBufferAmplForTPositon == AMPLFORT_ROUND_BUFLEN) {
     gl_nCircleBufferAmplForTPositon = 0;
     gl_bCircleBufferAmplForTOverRound = 1;
   }
+
+  if( gl_bCircleBufferAmplForTOverRound == 1)
+    gl_dblCircleBufferMean = gl_dblCircleBufferSumm / ( double) AMPLFORT_ROUND_BUFLEN;
+  else
+    gl_dblCircleBufferMean = gl_dblCircleBufferSumm / ( double) gl_nCircleBufferAmplForTPositon;
 }
 
+/*
 double CircleBufferAmplForT_mean( int nLen) {
   double dblSumm = 0.;
   double dblMean = 0.;
@@ -196,6 +200,7 @@ double CircleBufferAmplForT_mean( int nLen) {
 
   return dblMean;
 }
+*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //обработчик прерываний
@@ -1507,6 +1512,7 @@ void main() {
 
   double dblDelta;
 
+
   bCalibProcessState = 0;    //0 - no calibration
 
                              //1 - processing min_t_point 1st thermosensor
@@ -1580,20 +1586,20 @@ void main() {
 #ifdef DEBUG
   printf("T7-SLG. Software version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MIDDLE, VERSION_MINOR);
   printf("DEBUG MODE\n");
-  gl_sn_MeaningCounterRound = LONG_OUTPUT_PACK_LEN;
-  printf("LONG_PACK: %d\n", gl_sn_MeaningCounterRound);
-  gl_sn_MeaningCounterRound = SHORT_OUTPUT_PACK_LEN;
-  printf("SHORT_PACK: %d\n", gl_sn_MeaningCounterRound);
+  i = LONG_OUTPUT_PACK_LEN;
+  printf("LONG_PACK: %d\n", i);
+  i = SHORT_OUTPUT_PACK_LEN;
+  printf("SHORT_PACK: %d\n", i);
 #endif
 
   /*
-  for( i=0; i<20; i++) {
+  for( i=0; i<30; i++) {
     CircleBufferAmplForT_add( i);
-    printf("%d  (%d %d %d %d %d %d %d %d %d %d)  M(2)=%.2f  M(5)=%.2f  M(3)=%.2f\n",
+    printf("%d  (%d %d %d %d %d %d %d %d %d %d)  S=%.2f  M=%.2f\n",
             i,
             gl_ushCircleBufferAmplForT[0], gl_ushCircleBufferAmplForT[1], gl_ushCircleBufferAmplForT[2], gl_ushCircleBufferAmplForT[3], gl_ushCircleBufferAmplForT[4],
             gl_ushCircleBufferAmplForT[5], gl_ushCircleBufferAmplForT[6], gl_ushCircleBufferAmplForT[7], gl_ushCircleBufferAmplForT[8], gl_ushCircleBufferAmplForT[9],
-            CircleBufferAmplForT_mean( 2), CircleBufferAmplForT_mean( 5), CircleBufferAmplForT_mean( 3));
+            gl_dblCircleBufferSumm, gl_dblCircleBufferMean);
   }
   
   while(1);
@@ -2128,8 +2134,6 @@ void main() {
 
   DACConfiguration();
 
-  gl_nSaveRulaRulm = 1;   //запускаем счёт тактов с малым отклонением скользящей средней от заданной  чтобы сохранить RULA-RULM
-
   while(1) {
     //**********************************************************************
     // Обработка буфера входящих команд
@@ -2151,32 +2155,34 @@ void main() {
           gl_un_RULAControl = ( RULA_MAX - RULA_MIN) / 2;
 
           //nDelta = ( RULA_MAX - RULA_MIN) / 2;
-          nDelta = 10;
+          //nDelta = 10;
 
-          //отключаем ошумление
+          //отключаем ошумление (введём его плавно)
           gl_nAppliedMCoeff = 4096;
 
-          gl_sn_MeaningCounter = 0;
-          gl_sn_MeaningCounterRound = 500;
-          dMeaningSumm = 0.;
-          dMeanImps = 0.;
-
-          //запускаем счёт тактов с малым отклонением скользящей средней от заданной  чтобы сохранить RULA-RULM
-          gl_nSaveRulaRulm = 1;
-
+          gl_nAmplAverageCounter = 0;
+          gl_dblAmplAverage = 0.;
         break;
 
         case 1: //установить код такта подставки
           flashParamTactCode = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
           configure_hanger(); nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+
+          gl_nAmplAverageCounter = 0;
+          gl_dblAmplAverage = 0.;
         break;
 
         case 2: //установить коэффициент M
           flashParamMCoeff = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
+
+          //отключаем ошумление (введём его плавно)
           gl_nAppliedMCoeff = 4096;
           DACConfiguration();
+
           nSentPacksRound = LONG_OUTPUT_PACK_LEN;
-          gl_nSaveRulaRulm = 1;
+
+          gl_nAmplAverageCounter = 0;
+          gl_dblAmplAverage = 0.;
         break;
 
         case 3: //установить начальную моду
@@ -2358,7 +2364,7 @@ void main() {
 
         //запрашиваем старший байт кода счётчика информационных импульсов
         //GP1SET = 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY1
-		    GP1DAT |= 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY2
+        GP1DAT |= 1 << (16 + 3);  //RDHBC (p1.3) = 1			WAY2
 
         pause( 1);                //пауза
 
@@ -2373,12 +2379,12 @@ void main() {
              ((( GP0DAT & BIT_2) >> 2) << 7);
 
         //GP1CLR = 1 << (16 + 3);  //RDHBC (p1.3) = 0				WAY1
-		    GP1DAT &= ~( 1 << (16 + 3));  //RDHBC (p1.3) = 0			WAY2
+        GP1DAT &= ~( 1 << (16 + 3));  //RDHBC (p1.3) = 0			WAY2
 
 
         //запрашиваем младший байт кода счётчика информационных импульсов
         //GP1SET = 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY1
-		    GP1DAT |= 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY2
+        GP1DAT |= 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY2
 
         pause( 1);                //пауза
 
@@ -2392,7 +2398,7 @@ void main() {
              ((( GP0DAT & BIT_2) >> 2) << 7);
 
         //GP1CLR = 1 << (16 + 4);  //RDLBC (p1.4) = 0		WAY1
-		    GP1DAT &= ~( 1 << (16 + 4));  //RDLBC (p1.4) = 0		WAY2
+        GP1DAT &= ~( 1 << (16 + 4));  //RDLBC (p1.4) = 0		WAY2
 
         //складываем два байта
         gl_ssh_angle_inc = lb + (hb << 8);
@@ -2553,8 +2559,6 @@ void main() {
 
 
 
-
-
         //**********************************************************************
         // Получение 1/2 амплитуды колебаний виброподвеса в виде числа импульсов от альтеры
         //**********************************************************************
@@ -2579,8 +2583,16 @@ void main() {
         GP3CLR = 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 0
 
         //складываем два байта (хотя он тут один)
+        gl_ushMeanImpulses_prev = gl_ush_MeanImpulses;
         gl_ush_MeanImpulses = hb;
-        CircleBufferAmplForT_add( gl_ush_MeanImpulses);
+        //CircleBufferAmplForT_add( gl_ush_MeanImpulses);
+        if( gl_nAmplAverageCounter >= MAX_AMPL_AVG_COUNTER) {
+          gl_dblAmplAverage = ( gl_dblAmplAverage * ( double) gl_nAmplAverageCounter - ( double) gl_ushMeanImpulses_prev + ( double) gl_ush_MeanImpulses) / ( double) gl_nAmplAverageCounter;
+        }
+        else {
+          gl_nAmplAverageCounter++;
+          gl_dblAmplAverage = ( gl_dblAmplAverage * ( gl_nAmplAverageCounter - 1) + ( double) gl_ush_MeanImpulses) / ( double) gl_nAmplAverageCounter;
+        }
 
         #ifdef DEBUG
           printf("DEBUG: Ampl: %d Mean: %.2f\n", gl_ush_MeanImpulses, CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound));
@@ -2591,7 +2603,7 @@ void main() {
         // Выдача данных согласно протоколу
         //**********************************************************************
         switch( nSentPacksCounter) {
-          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound));      break; //UTD3
+          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_dblCircleBufferMean);      break; //UTD3
           case 1: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 1, gl_ssh_Utd1);      break; //UTD1
           case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, gl_un_RULAControl);      break; //UTD2
           case 3: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 3, gl_ssh_current_1);      break; //I1
@@ -2607,7 +2619,7 @@ void main() {
           case 12: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 12, flashParamI2min);        break;  //flashParamI2min
           case 13: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 13, flashParamAmplAngMin1);  break;  //flashParamAmplAngMin1
           case 14: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 14, flashParamDecCoeff);     break;  //flashParamAmplAngMin2
-          case 15: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 15, gl_nSaveRulaRulm);    break;  //flashParamSignCoeff
+          case 15: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 15, flashParamSignCoeff);    break;  //flashParamSignCoeff
           case 16: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 16, 0);    break;               //SOFTWARE VERSION
           case 17: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 17, flashParam_calibT1);     break;  //min thermo-calib point T
           case 18: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 18, flashParamT1_TD1_val);   break;  //min thermo-calib point thermo1 data
@@ -2667,44 +2679,21 @@ void main() {
 
           ADCChannel = 0;     //запускаем измерения с UTD3
           ADCCP = ADCChannel;
-		      pause( 10);
+          pause( 10);
           ADCCON |= 0x80;
         }
         else
           nSentPacksCounter = ( nSentPacksCounter) % nSentPacksRound;
 
 
-		    //**********************************************************************
+        //**********************************************************************
         //Стабилизация амплитуды колебаний виброподвеса
         //**********************************************************************
-        dblDelta = flashParamAmplitudeCode - CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound);
-        
-        //сохранение RULA и RULM во флэш
-        if( gl_nSaveRulaRulm > 0) {
-          if( fabs( dblDelta) < 2.) {
-            gl_nSaveRulaRulm++;
-            if( gl_nSaveRulaRulm == 101) {
+        dblDelta = flashParamAmplitudeCode - gl_dblAmplAverage;
 
-              gl_ushFlashParamLastRULA = gl_un_RULAControl;
-              gl_ushFlashParamLastRULM = gl_nAppliedMCoeff;
+        //если расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
+        if( fabs( dblDelta) > 0.344827586) {
 
-              //если набрали 100 точек в которых не сильно отклонялись от заданой амплитуды - сохраним RULA и RULM
-              SaveRulaRulm();
-
-              //и выключим сохранение
-              gl_nSaveRulaRulm = 0;
-
-              nSentPacksRound = LONG_OUTPUT_PACK_LEN;
-            }
-          }
-          else {
-            gl_nSaveRulaRulm = 1;
-          }
-        }
-
-        //ели расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
-        if( fabs( dblDelta) > 0.5) {
-          
           if( dblDelta > 0)
             gl_un_RULAControl++;
           else

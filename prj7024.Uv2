@@ -40,7 +40,7 @@ Options 1,0,0  // Target 'Target 1'
  OrgReg (ÿADI\)
  TgStat=16
  OutDir (.\)
- OutName (slg_m3_401)
+ OutName (slg_m3_406)
  GenApp=1
  GenLib=0
  GenHex=1
@@ -56,7 +56,7 @@ Options 1,0,0  // Target 'Target 1'
  BrunUsr 1 0 <>
  SVCSID <>
  KACPU (ARM7TDMI)
- TKAFL { 0,128,0,0,0,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+ TKAFL { 155,118,0,0,0,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
  KIROM { 1,0,0,8,0,0,248,0,0 }
  KIRAM { 0,0,0,1,0,0,32,0,0 }
  KXRAM { 0,0,0,0,0,0,0,0,0 }
