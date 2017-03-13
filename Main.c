@@ -53,7 +53,7 @@ signed short gl_ssh_angle_hanger_prev = 0;
 
 unsigned short gl_ush_MeanImpulses = 1;
 
-#define RULA_MAX 4096
+#define RULA_MAX 4095
 #define RULA_MIN 25
 
 //unsigned char cRulaH = RULA_MAX, cRulaL = RULA_MIN;
@@ -115,7 +115,7 @@ int ADCChannel = 0; //читаемый канал АЦП
 char input_buffer[6] = { 0, 0, 0, 0, 0, 0};
 char pos_in_in_buf = 0;
 
-unsigned short flashParamAmplitudeCode = 90, flashParamTactCode = 0, flashParamMCoeff = 4, flashParamStartMode = 5;
+unsigned short flashParamAmplitudeCode = 9000, flashParamTactCode = 0, flashParamMCoeff = 4, flashParamStartMode = 5;
 unsigned int flashParamDeviceId = 0;
 char flashParamOrg[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};
 unsigned short flashParamDateYear = 0, flashParamDateMonth = 0, flashParamDateDay = 0;
@@ -550,8 +550,8 @@ void load_params( void) {
 #endif
 
   //PARAMS CHECKING
-  if( flashParamAmplitudeCode > 255)     //Код амплитуды [0-255]. дефолтное значение 90
-    flashParamAmplitudeCode = 35;       //90 для большого 35 для маленького
+  if( flashParamAmplitudeCode > 25500)     //Код амплитуды [0-25500]. дефолтное значение 9000
+    flashParamAmplitudeCode = 9000;        //9000 для большого 3500 для маленького
 
   if( flashParamTactCode > 3)       //Код такта амплитуды [0-3]. дефолтное значение 0
     flashParamTactCode = 0;
@@ -1074,6 +1074,205 @@ void ThermoCalibrationCalculation( void)
     bCalibrated = 0;
 }
 
+void InitBaudRate115200() {
+  /*
+  //WORK PARAMETERS FOR PRECISE 115200
+  COMDIV0 = 0x0B;
+  COMDIV1 = 0x00;
+  COMDIV2 = 0x0029;
+  */
+}
+
+void InitBaudRate256000() {
+  //DL = 41.78 * 10^6 / 2 ^ (CD=0) * 1/16 * 1/ (2*Baudrate)
+  //RESULT = (M+N/2048) = 41.78 * 10^6 / ( 2 ^ (CD=0) * 16 *  2 * Baudrate)
+  // M = Floor ( RESULT)
+  // N = (RESULT - M) * 2048
+
+  
+  //WORK PARAMETERS FOR PRECISE 256000
+  /*COMDIV0 = 0x05;
+  COMDIV1 = 0x00;
+  COMDIV2 = 0x8829;
+  */
+}
+
+void InitBaudRate512000() {
+  //DL = 41.78e6 / 16/2/512000 = 2.xxxxxx
+  //M+N/2048 = 41.78e6 / 16/2/2/512000 = 1.275xxxxxx
+  //M=1
+  //N=563=0x233
+  //      8             A
+  //  1 0 0   0     1   0 1 0
+  //  0 0 1   1     0   0 1 1
+  //     3             3
+  //COMDIV2 = 0x8A33
+  
+  //COMDIV0 = 2;
+  //COMDIV1 = 0x00;
+  //COMDIV2 = 0x8A33;
+}
+
+void InitBaudRate921600() {
+  /****************************************************************************************** */
+  /*   921 600 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / /921600 / (2^(CD=0)=1) / 16 / 2 = 1,416693793
+  //DL=1
+  //M+N/2048 = 41.78e6 / /921600 / (2^(CD=0)=1) / 16/ (DL=1) / 2 = 1,416693793
+  //M=1
+  //N=853=0x355
+  //      8             B
+  //  1 [0 0] [0     1]  0 1 1
+  //  0  1 0   1     0   1 0 1
+  //     5             5
+  //COMDIV2 = 0x8B55
+  
+  COMDIV0 = 1;      //младший байт делителя (DL)
+  COMDIV1 = 0x00;   //старший байт делителя (DL)
+  COMDIV2 = 0x8B55; //16-разрядный регистр дробного делителя
+                    //15 - FBEN - бит разрешения работы генератора с дробным делителем
+                    //14-13 reserved
+                    //12-11 M
+                    //10-0  N
+  
+  /****************************************************************************************** */
+}
+
+void InitBaudRate930000() {
+  /****************************************************************************************** */
+  /*   930 000 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / 930 000 / (2^(CD=0)=1) / 16 / 2 = 1,404
+  //DL=1
+  //M+N/2048 = 41.78e6 / 930 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,404
+  //M=1
+  //N=827=0x33B
+  //      8             B
+  //  1 [0 0] [0     1]  0 1 1
+  //  0  0 1   1     1   0 1 1
+  //     3             B
+  //COMDIV2 = 0x8B3B
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8B3B;
+}
+
+void InitBaudRate940000() {
+  /****************************************************************************************** */
+  /*   940 000 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / 940 000 / (2^(CD=0)=1) / 16 / 2 = 1,389
+  //DL=1
+  //M+N/2048 = 41.78e6 / 940 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,389
+  //M=1
+  //N=797=0x31D
+  //      8             B
+  //  1 [0 0] [0     1]  0 1 1
+  //  0  0 0   1     1   1 0 1
+  //     1             D
+  //COMDIV2 = 0x8B1D
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8B1D;
+}
+
+void InitBaudRate950000() {
+  /****************************************************************************************** */
+  /*   950 000 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / 950 000 / (2^(CD=0)=1) / 16 / 2 = 1,374
+  //DL=1
+  //M+N/2048 = 41.78e6 / 950 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,374
+  //M=1
+  //N=766=0x2FE
+  //      8             A
+  //  1 [0 0] [0     1]  0 1 0
+  //  1  1 1   1     1   1 1 0
+  //     F             E
+  //COMDIV2 = 0x8AFE
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8AFE;
+}
+
+void InitBaudRate960000() {
+  /****************************************************************************************** */
+  /*   960 000 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / 960 000 / (2^(CD=0)=1) / 16 / 2 = 1,36
+  //DL=1
+  //M+N/2048 = 41.78e6 / 960 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,36
+  //M=1
+  //N=737=0x2E1
+  //      8             A
+  //  1 [0 0] [0     1]  0 1 0
+  //  1  1 1   0     0   0 0 1
+  //     E             1
+  //COMDIV2 = 0x8AE1
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8AE1;
+}
+
+void InitBaudRate990000() {
+  //DL = 41.78e6 / 990 000 / (2^(CD=0)=1) / 16 / 2 = 1,319
+  //DL=1
+  //M+N/2048 = 41.78e6 / 990 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,319
+  //M=1
+  //N=653=0x28D
+  //      8             A
+  //  1 [0 0] [0     1]  0 1 0
+  //  1  0 0   0     1   1 0 1
+  //     8             D
+  //COMDIV2 = 0x8A8D
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8A8D; //16-разрядный регистр дробного делителя
+                    //15 - FBEN - бит разрешения работы генератора с дробным делителем
+                    //14-13 reserved
+                    //12-11 M
+                    //10-0  N
+}
+
+void InitBaudRate1000000() {
+  /****************************************************************************************** */
+  /*   1 000 000 ********/
+  /****************************************************************************************** */
+  //DL = 41.78e6 / 1 000 000 / (2^(CD=0)=1) / 16 / 2 = 1,305625
+  //DL=1
+  //M+N/2048 = 41.78e6 / 1 000 000 / (2^(CD=0)=1) / 16 / (DL=1) / 2 = 1,305625
+  //M=1
+  //N=626=0x272
+  //      8             A
+  //  1 [0 0] [0     1]  0 1 0
+  //  0  1 1   1     0   0 1 0
+  //     7             2
+  //COMDIV2 = 0x8A72
+
+  //COMDIV0 = 1;      //младший байт делителя (DL)
+  //COMDIV1 = 0x00;   //старший байт делителя (DL)
+  //COMDIV2 = 0x8A72; //16-разрядный регистр дробного делителя
+                    //15 - FBEN - бит разрешения работы генератора с дробным делителем
+                    //14-13 reserved
+                    //12-11 M
+                    //10-0  N
+  
+  /****************************************************************************************** */
+}
+
+void testPike() {
+  //В тестовых целях делаем сигнал на линии P0.0
+  GP0DAT |= 1 << ( 16);	//тестовая линия p0.0 set
+  //for( i=0; i<100; i++);
+  GP0DAT &= ~( 1 << ( 16));	//тестовая линия p0.0 clear
+}
+
 void main() {
   unsigned short ush_SA_check_time;
 
@@ -1142,47 +1341,26 @@ void main() {
   COMCON0 = 0x080;      // Setting DLAB
 
   // Setting DIV0 and DIV1 to DL calculated
+  //InitBaudRate115200();
+  //InitBaudRate256000();
+  //InitBaudRate512000();
+  InitBaudRate921600();
+  //InitBaudRate930000();
+  //InitBaudRate940000();
+  //InitBaudRate950000();
+  //InitBaudRate960000();
+  //InitBaudRate990000();
+  //InitBaudRate1000000();
+
+  /****************************************************************************************** */
+  COMCON0 = 0x007;  // Clearing DLAB
 
   /*
-  //WORK PARAMETERS FOR PRECISE 115200
-  COMDIV0 = 0x0B;
-  COMDIV1 = 0x00;
-  COMDIV2 = 0x0029;
+  //Test Baudrate
+  while(1) {
+    printf("921 600 Baudrate is great!\n");
+  }
   */
-
-
-  //DL = 41.78 * 10^6 / 2 ^ (CD=0) * 1/16 * 1/ (2*Baudrate)
-  //RESULT = (M+N/2048) = 41.78 * 10^6 / ( 2 ^ (CD=0) * 16 *  2 * Baudrate)
-  // M = Floor ( RESULT)
-  // N = (RESULT - M) * 2048
-
-  
-  //WORK PARAMETERS FOR PRECISE 256000
-  /*COMDIV0 = 0x05;
-  COMDIV1 = 0x00;
-  COMDIV2 = 0x8829;
-  */
-
-  /****************************************************************************************** */
-  /*   512 000 ********/
-  /****************************************************************************************** */
-  //DL = 41.78e6 / 16/2/512000 = 2.xxxxxx
-  //M+N/2048 = 41.78e6 / 16/2/2/512000 = 1.275xxxxxx
-  //M=1
-  //N=563=0x233
-  //      8             A
-  //  1 0 0   0     1   0 1 0
-  //  0 0 1   1     0   0 1 1
-  //     3             3
-  //COMDIV2 = 0x8A33
-  
-  COMDIV0 = 2;
-  COMDIV1 = 0x00;
-  COMDIV2 = 0x8A33;
-  
-  /****************************************************************************************** */
-
-  COMCON0 = 0x007;  // Clearing DLAB
 
 #ifdef DEBUG
   printf("T7-SLG. Software version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MIDDLE, VERSION_MINOR);
@@ -1691,6 +1869,7 @@ void main() {
 
   //**********************************************************************
   
+
 #ifdef DEBUG
   printf("done\n");
 
@@ -1699,9 +1878,11 @@ void main() {
   if( gl_b_SyncMode)
     printf("DEBUG: Calculation of first decrement coefficient\n");  
 #endif
-  
+
+/*
   if( gl_b_SyncMode)
     FirstDecrementCoeffCalculation();
+*/
 
 #ifdef DEBUG
   printf("VALUE=%.2f  ", flashParamDecCoeff / 65535.);
@@ -1744,7 +1925,7 @@ void main() {
 
   while(1) {
     if( bSimpleDnDu == 1) {
-     
+
       while( !(GP0DAT & 0x10)) {}
 
       if( gl_b_SA_Processed == 0) {
@@ -2135,8 +2316,6 @@ void main() {
 
 
 
-
-
     /*
     //наёбочная часть - эмуляция такта 10(5?) раз в секунду
     prt2val = T2VAL;
@@ -2152,6 +2331,8 @@ void main() {
       #endif
       */
       if( gl_b_SA_Processed == 0) { //если в этом SA цикле мы его еще не обрабатывали
+
+        testPike();
 
         //отсечка получения TA_SA (для вычисления длительности)
         gl_ssh_SA_time = ( T1LD + gl_ssh_prT1VAL - T1VAL) % T1LD;
@@ -2184,7 +2365,7 @@ void main() {
 
         //запрашиваем младший байт кода счётчика информационных импульсов
         //GP1SET = 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY1
-		    GP1DAT |= 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY2
+        GP1DAT |= 1 << (16 + 4);  //RDLBC (p1.4) = 1		WAY2
 
         //pause( 1);                //пауза
 
@@ -2213,6 +2394,7 @@ void main() {
 
 
 
+        testPike();
 
         // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // *****
         // 2. в случае асинхр режима, запрашиваем у альтеры код счётчика информационных импульсов
@@ -2268,6 +2450,8 @@ void main() {
             #endif
             */
         }
+
+        testPike();
 
         //**********************************************************************
         // Получение аналогового параметра
@@ -2384,20 +2568,21 @@ void main() {
 
 
 
+        testPike();
 
         //**********************************************************************
         // Получение 1/2 амплитуды колебаний виброподвеса в виде числа импульсов от альтеры
         //**********************************************************************
 
         //ждём высокого уровня сигнала готовности AMPL_FOR_T_READY (p3.2)
-        while( !( GP3DAT & 0x04)) {}
+        //while( !( GP3DAT & 0x04)) {}
+        if( GP3DAT & 0x04) {
+          //запрашиваем среднее за период частотной подставки
+          GP3DAT |= 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 1
+          //pause( 1);                //пауза
 
-        //запрашиваем среднее за период частотной подставки
-        GP3DAT |= 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 1
-        //pause( 1);                //пауза
-
-        //чтение
-        hb = (( GP1DAT & BIT_5) >> 5) +
+          //чтение
+          hb = (( GP1DAT & BIT_5) >> 5) +
              ((( GP0DAT & BIT_7) >> 7) << 1) +
              ((( GP0DAT & BIT_1) >> 1) << 2) +
              ((( GP2DAT & BIT_3) >> 3) << 3) +
@@ -2406,16 +2591,18 @@ void main() {
              ((( GP0DAT & BIT_6) >> 6) << 6) +
              ((( GP0DAT & BIT_2) >> 2) << 7);
 
-        GP3CLR = 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 0
+          GP3CLR = 1 << (16 + 3);  //RD_AMPL_T_CODE (p3.3) -> 0
 
-        //складываем два байта (хотя он тут один)
-        gl_ush_MeanImpulses = hb;
-        CircleBufferAmplForT_add( gl_ush_MeanImpulses);
+          //складываем два байта (хотя он тут один)
+          gl_ush_MeanImpulses = hb;
+          CircleBufferAmplForT_add( gl_ush_MeanImpulses);
 
-        #ifdef DEBUG
-          printf("DEBUG: Ampl: %d Mean: %.2f\n", gl_ush_MeanImpulses, CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound));
-        #endif
+          #ifdef DEBUG
+            printf("DEBUG: Ampl: %d Mean: %.2f\n", gl_ush_MeanImpulses, CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound));
+          #endif
+        }
 
+        testPike();
 
         //**********************************************************************
         // Выдача данных согласно протоколу
@@ -2423,7 +2610,7 @@ void main() {
         switch( nSentPacksCounter) {
           case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_dblCircleBufferMean);      break; //UTD3
           case 1: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 1, gl_ssh_Utd1);      break; //UTD1
-          case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, gl_un_RULAControl);      break; //UTD2
+          case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, flashParamAmplitudeCode);      break; //UTD2
           case 3: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 3, gl_ssh_current_1);      break; //I1
           case 4: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 4, gl_ssh_current_2);      break; //I2
           case 5: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 5, gl_ssh_Perim_Voltage);  break; //CntrPc
@@ -2477,6 +2664,8 @@ void main() {
           printf( "%d     %d     %d      %.2fV\n", gl_ssh_angle_inc, gl_ssh_angle_inc - gl_ssh_angle_inc_prev, gl_ssh_angle_hanger- gl_ssh_angle_hanger_prev, ( double) gl_ssh_angle_hanger * 0.61 / 1000.);
         #endif
 
+        testPike();
+
         gl_ssh_angle_inc_prev = gl_ssh_angle_inc;
 
         // ************************************************************************************
@@ -2509,6 +2698,7 @@ void main() {
         else
           nSentPacksCounter = ( nSentPacksCounter) % nSentPacksRound;
 
+        testPike();
 
 		    //**********************************************************************
         //Стабилизация амплитуды колебаний виброподвеса
@@ -2536,13 +2726,13 @@ void main() {
               case  7:  gl_nAmplStabApplyRulaTacts = 10; gl_nAmplStabMovAvWidth = 2500;  gl_nDelta = 1; break;
               case  8 : gl_nAmplStabApplyRulaTacts = 20; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
               case  9:  gl_nAmplStabApplyRulaTacts = 40; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
-              case 10:  gl_nAmplStabApplyRulaTacts = 45; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
+              case 10:  gl_nAmplStabApplyRulaTacts = 45; gl_nAmplStabMovAvWidth = 4500;  gl_nDelta = 1; break;
             }
           }
         }
 
-        dblDelta = flashParamAmplitudeCode - gl_dblCircleBufferMean;
-        if( gl_nCircleBufferAmplForTPositon % gl_nAmplStabApplyRulaTacts == 0) {
+        dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblCircleBufferMean;
+        if( ( gl_nCircleBufferAmplForTPositon % gl_nAmplStabApplyRulaTacts) == 0) {
 
           //если расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
           if( fabs( dblDelta) > 0.5) {
@@ -2577,10 +2767,7 @@ void main() {
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали
         gl_b_SA_Processed = 1;
 
-        //В тестовых целях делаем сигнал на линии P0.0
-        GP0DAT |= 1 << ( 16);	//тестовая линия p0.0 set
-        //for( i=0; i<100; i++);
-        GP0DAT &= ~( 1 << ( 16));	//тестовая линия p0.0 clear      
+        testPike();
       }
 /*
 #ifdef DEBUG
