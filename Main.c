@@ -56,30 +56,13 @@ unsigned short gl_ush_MeanImpulses = 1;
 #define RULA_MAX 4095
 #define RULA_MIN 25
 
-//unsigned char cRulaH = RULA_MAX, cRulaL = RULA_MIN;
-//unsigned char cRULAControl = 40; //( RULA_MAX - RULA_MIN) / 2;      127 = 1.25V (Dac0)
+//unsigned int gl_un_RULAControl = 64;      //64   = 0.039 V  
+//unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V  
+//unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V  
+unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V  
+unsigned int gl_un_PrevAmplRegulationT2;
 
-//unsigned int gl_un_RULAControl = 0;       //0    = 0.000 V
-//unsigned int gl_un_RULAControl = 64;      //64   = 0.039 V
 
-//unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V 
-//unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V
-unsigned int gl_un_RULAControl = 4095;    //4095 = 2.500 V
-
-//unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 2;
-unsigned int gl_nDelta = 4;
-
-#define MEANING_IMP_PERIOD_100 100
-#define MEANING_IMP_PERIOD_200 200
-#define MEANING_IMP_PERIOD_300 300
-#define MEANING_IMP_PERIOD_400 400
-#define MEANING_IMP_PERIOD_500 500
-#define MEANING_IMP_PERIOD_STABLE 1000
-
-int gl_sn_MeaningCounter = 0;
-int gl_sn_MeaningCounterRound = 500;
-double dMeaningSumm = 0.;
-double dMeanImps = 0.;
 int nT2RepeatBang;
 
 char gl_n_PerimeterReset = 0;         //0 - рабочий режим   1 - выключили интегратор   2 - интегратор включили
@@ -150,8 +133,7 @@ double TD2_K, TD2_B;
 int gl_nAppliedMCoeff;
 
 
-int gl_nAmplStabStep = 0;
-int gl_nAmplStabApplyRulaTacts = 1;
+int gl_nAmplStabStep = 0; //плавное введение ошумления
 double gl_dblAmplMean;
 int  gl_nAmplMeanCounter;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1450,18 +1432,18 @@ void main() {
   //**********************************************************************
   // Конфигурация Timer0
   //**********************************************************************
-  T0CON = 0x80;
+  T0CON = 0x80;           //core clocking
 
   //**********************************************************************
   // Конфигурация Timer1
   //**********************************************************************
-  T1CON = 0x2c0;
+  T1CON = 0x2C0;          //32kHz clocking
   T1LD = 0x100000;
 
   //**********************************************************************
   // Конфигурация Timer2
   //**********************************************************************
-  T2CON = 0x0C0;
+  T2CON = 0x2C0;          //32kHz clocking
   T2LD = 0x100000;
 
 #ifdef DEBUG
@@ -1581,7 +1563,7 @@ void main() {
   if( gl_ushFlashParamLastRULA != 0)
     gl_un_RULAControl = gl_ushFlashParamLastRULA;    //восстанавливаем последнее значение RULA
   else
-    gl_un_RULAControl = 2457;                    //Если последнего значения не было 2457 = 1.500 V
+    gl_un_RULAControl = 1400;
 
   //if( gl_ushFlashParamLastRULM != 0)
   //  gl_nAppliedMCoeff = gl_ushFlashParamLastRULM;    //восстанавливаем последнее значение RULM
@@ -1860,7 +1842,7 @@ void main() {
 #endif
 
   nT2RepeatBang = ( T2VAL - 32768) % T2LD;
-
+  gl_un_PrevAmplRegulationT2 = T2VAL;
   //**********************************************************************
   //**********************************************************************
   //******************* ОСНОВНОЙ ЦИКЛ РАБОТЫ ПРОГРАММЫ *******************
@@ -1872,7 +1854,7 @@ void main() {
   if( gl_ushFlashParamLastRULA != 0)
     gl_un_RULAControl = gl_ushFlashParamLastRULA;    //восстанавливаем последнее значение RULA
   else
-    gl_un_RULAControl = 2457;                    //Если последнего значения не было, то ставим 2457 = 1.500 V
+    gl_un_RULAControl = 1400;                    //LIE!!   Если последнего значения не было, то ставим 2457 = 1.500 V
 
   gl_nAppliedMCoeff = 4096;
 
@@ -2048,26 +2030,23 @@ void main() {
           //для 55импульсов амплитуды (это соответствует 55*2.9 = 160") у нас максимум (4096)
           //gl_un_RULAControl = ( unsigned int) ( 4095. / 55. * ( double) flashParamAmplitudeCode);
 
-          gl_un_RULAControl = ( RULA_MAX - RULA_MIN) / 2;
+          //gl_un_RULAControl = ( RULA_MAX - RULA_MIN) / 2;
+          //gl_un_RULAControl = 1400;
+          //gl_un_RULAControl = 1000;
 
           //nDelta = ( RULA_MAX - RULA_MIN) / 2;
-          gl_nDelta = 10;
+          //gl_nDelta = 10;
 
-          //отключаем ошумление
+          //отключаем ошумление (будем его вводить плавно)
           gl_nAppliedMCoeff = 4096;
 
-          gl_sn_MeaningCounter = 0;
-          gl_sn_MeaningCounterRound = 500;
-          dMeaningSumm = 0.;
-          dMeanImps = 0.;
-
+          //сбрасываем скользящую среднюю амплитуды
           gl_dblAmplMean = 0;
           gl_nAmplMeanCounter = 0;
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
-          gl_nAmplStabApplyRulaTacts = 1;
-          gl_nDelta = 4;
+          //gl_nDelta = 4;
         break;
 
         case 1: //установить код такта подставки
@@ -2079,8 +2058,7 @@ void main() {
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
-          gl_nAmplStabApplyRulaTacts = 1;
-          gl_nDelta = 4;
+          //gl_nDelta = 4;
         break;
 
         case 2: //установить коэффициент M
@@ -2094,8 +2072,7 @@ void main() {
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
-          gl_nAmplStabApplyRulaTacts = 1;
-          gl_nDelta = 4;
+          //gl_nDelta = 4;
         break;
 
         case 3: //установить начальную моду
@@ -2562,6 +2539,8 @@ void main() {
           //складываем два байта (хотя он тут один)
           gl_ush_MeanImpulses = hb;
 
+
+          //вычисляем скользящую среднюю за последние 100 (ну или сколько к этому моменту прилетело) тактов
           if( gl_nAmplMeanCounter == 0.) {
             gl_dblAmplMean = ( double) gl_ush_MeanImpulses;
           }
@@ -2570,7 +2549,7 @@ void main() {
           }
 
           gl_nAmplMeanCounter++;
-          if( gl_nAmplMeanCounter >= 150.)
+          if( gl_nAmplMeanCounter > 100.)
             gl_nAmplMeanCounter = 100.;
 
         }
@@ -2681,9 +2660,9 @@ void main() {
         if( gl_nAmplStabStep < 10) {
           if( T2VAL <= nT2RepeatBang) {
             gl_nAmplStabStep++;
-            nT2RepeatBang = ( T2VAL - 6553) % T2LD;
+            nT2RepeatBang = ( T2VAL +T2LD - 6553) % T2LD;
 
-            gl_nAppliedMCoeff = 4096. * (1. - (1. - ( double) flashParamMCoeff / 250.) / 10. * ( double) gl_nAmplStabStep);
+            gl_nAppliedMCoeff = 4096. * ( 1. - ( 1. - ( double) flashParamMCoeff / 250.) / 10. * ( double) gl_nAmplStabStep);
 
             /*switch( gl_nAmplStabStep) {
               case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nDelta = 4; break;
@@ -2699,22 +2678,34 @@ void main() {
               case 10:  gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1; break;
             }
             */
-            gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1;
+            //gl_nDelta = 1;
           }
         }
 
-        dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblAmplMean;
-        if( ( gl_nAmplMeanCounter % gl_nAmplStabApplyRulaTacts) == 0) {
+        if( (( gl_un_PrevAmplRegulationT2 + T2LD - T2VAL)) % T2LD >= 3276) {
+        //if( ( gl_nAmplMeanCounter % ) == 0) {
+
+          gl_un_PrevAmplRegulationT2 = T2VAL;
+
+          dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblAmplMean;
 
           //если расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
-          if( fabs( dblDelta) > 0.5) {
-
-            if( dblDelta > 0)
-              //gl_un_RULAControl++;
-              gl_un_RULAControl += gl_nDelta;
-            else
-              //gl_un_RULAControl--;
-              gl_un_RULAControl -= gl_nDelta;
+          /*
+          if(      fabs( dblDelta) > 50)  { if( dblDelta > 0) gl_un_RULAControl += 50;  else  gl_un_RULAControl -= 50; }
+          else if( fabs( dblDelta) > 10)  { if( dblDelta > 0) gl_un_RULAControl += 10;   else  gl_un_RULAControl -= 10;  }
+          else if( fabs( dblDelta) > 5)   { if( dblDelta > 0) gl_un_RULAControl += 5;    else  gl_un_RULAControl -= 5;   }
+          else if( fabs( dblDelta) > 1) { if( dblDelta > 0)   gl_un_RULAControl += 1;    else  gl_un_RULAControl -= 1;   }
+          */
+          if( dblDelta > 0.5) {
+            gl_un_RULAControl +=  ( int) ( dblDelta * 5.);
+          }
+          else if( dblDelta < 0.5) {
+            if( ( int) fabs( dblDelta * 5.) > gl_un_RULAControl) {
+              gl_un_RULAControl = RULA_MIN;
+            }
+            else {
+              gl_un_RULAControl +=  ( int) ( dblDelta * 5.);
+            }
           }
         }
 
