@@ -149,34 +149,11 @@ double TD2_K, TD2_B;
 
 int gl_nAppliedMCoeff;
 
-#define AMPLFORT_ROUND_BUFLEN 3000
-unsigned short gl_ushCircleBufferAmplForT[ AMPLFORT_ROUND_BUFLEN];
-int gl_nCircleBufferAmplForTPositon = 0;
-char gl_bCircleBufferAmplForTOverRound = 0;
-double gl_dblCircleBufferSumm = 0.;
-double gl_dblCircleBufferMean;
 
 int gl_nAmplStabStep = 0;
 int gl_nAmplStabApplyRulaTacts = 1;
-int gl_nAmplStabMovAvWidth = 100;
-
-void CircleBufferAmplForT_add( unsigned short newVal) {
-  gl_dblCircleBufferSumm -= gl_ushCircleBufferAmplForT[ gl_nCircleBufferAmplForTPositon];
-  gl_dblCircleBufferSumm += newVal;
-
-  gl_ushCircleBufferAmplForT[ gl_nCircleBufferAmplForTPositon] = newVal;
-  if( ++gl_nCircleBufferAmplForTPositon == gl_nAmplStabMovAvWidth) {
-    gl_nCircleBufferAmplForTPositon = 0;
-    gl_bCircleBufferAmplForTOverRound = 1;
-  }
-
-  if( gl_bCircleBufferAmplForTOverRound == 1)
-    gl_dblCircleBufferMean = gl_dblCircleBufferSumm / ( double) AMPLFORT_ROUND_BUFLEN;
-  else
-    gl_dblCircleBufferMean = gl_dblCircleBufferSumm / ( double) gl_nCircleBufferAmplForTPositon;
-
-}
-
+double gl_dblAmplMean;
+int  gl_nAmplMeanCounter;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //обработчик прерываний
 void FIQ_Handler (void)	__fiq
@@ -1371,19 +1348,6 @@ void main() {
   printf("SHORT_PACK: %d\n", i);
 #endif
 
-  /*
-  for( i=0; i<20; i++) {
-    CircleBufferAmplForT_add( i);
-    printf("%d  (%d %d %d %d %d %d %d %d %d %d)  M(2)=%.2f  M(5)=%.2f  M(3)=%.2f\n",
-            i,
-            gl_ushCircleBufferAmplForT[0], gl_ushCircleBufferAmplForT[1], gl_ushCircleBufferAmplForT[2], gl_ushCircleBufferAmplForT[3], gl_ushCircleBufferAmplForT[4],
-            gl_ushCircleBufferAmplForT[5], gl_ushCircleBufferAmplForT[6], gl_ushCircleBufferAmplForT[7], gl_ushCircleBufferAmplForT[8], gl_ushCircleBufferAmplForT[9],
-            CircleBufferAmplForT_mean( 2), CircleBufferAmplForT_mean( 5), CircleBufferAmplForT_mean( 3));
-  }
-  
-  while(1);
-  */
-
   //**********************************************************************
   // Конфигурация лампочки
   //**********************************************************************	
@@ -1898,7 +1862,6 @@ void main() {
 
   nT2RepeatBang = ( T2VAL - 32768) % T2LD;
 
-  memset( gl_ushCircleBufferAmplForT, '\0', sizeof( gl_ushCircleBufferAmplForT));
   //**********************************************************************
   //**********************************************************************
   //******************* ОСНОВНОЙ ЦИКЛ РАБОТЫ ПРОГРАММЫ *******************
@@ -1913,12 +1876,7 @@ void main() {
     gl_un_RULAControl = 2457;                    //Если последнего значения не было, то ставим 2457 = 1.500 V
 
   gl_nAppliedMCoeff = 4096;
-  /*
-  if( gl_ushFlashParamLastRULM != 0)
-    gl_nAppliedMCoeff = gl_ushFlashParamLastRULM;    //восстанавливаем последнее значение RULM
-  else
-    gl_nAppliedMCoeff = 4096;                    //Если последнего значения не было, то ставим 4096 и далее RULM каждый такт будет делаться -- до нужного значения
-  */
+
 
   DACConfiguration();
 
@@ -2104,15 +2062,12 @@ void main() {
           dMeaningSumm = 0.;
           dMeanImps = 0.;
 
-          gl_dblCircleBufferSumm = 0.;
-          gl_nCircleBufferAmplForTPositon = 0;
-          gl_bCircleBufferAmplForTOverRound = 0;
-          memset( gl_ushCircleBufferAmplForT, '\0', sizeof( gl_ushCircleBufferAmplForT));
+          gl_dblAmplMean = 0;
+          gl_nAmplMeanCounter = 0;
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
-          gl_nAmplStabMovAvWidth =  100;
           gl_nDelta = 4;
         break;
 
@@ -2120,15 +2075,12 @@ void main() {
           flashParamTactCode = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
           configure_hanger(); nSentPacksRound = LONG_OUTPUT_PACK_LEN;
 
-          gl_dblCircleBufferSumm = 0.;
-          gl_nCircleBufferAmplForTPositon = 0;
-          gl_bCircleBufferAmplForTOverRound = 0;
-          memset( gl_ushCircleBufferAmplForT, '\0', sizeof( gl_ushCircleBufferAmplForT));
+          gl_dblAmplMean = 0;
+          gl_nAmplMeanCounter = 0;
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
-          gl_nAmplStabMovAvWidth =  100;
           gl_nDelta = 4;
         break;
 
@@ -2138,15 +2090,12 @@ void main() {
           DACConfiguration();
           nSentPacksRound = LONG_OUTPUT_PACK_LEN;
 
-          gl_dblCircleBufferSumm = 0.;
-          gl_nCircleBufferAmplForTPositon = 0;
-          gl_bCircleBufferAmplForTOverRound = 0;
-          memset( gl_ushCircleBufferAmplForT, '\0', sizeof( gl_ushCircleBufferAmplForT));
+          gl_dblAmplMean = 0;
+          gl_nAmplMeanCounter = 0;
 
           nT2RepeatBang = T2VAL;
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
-          gl_nAmplStabMovAvWidth =  100;
           gl_nDelta = 4;
         break;
 
@@ -2595,11 +2544,18 @@ void main() {
 
           //складываем два байта (хотя он тут один)
           gl_ush_MeanImpulses = hb;
-          CircleBufferAmplForT_add( gl_ush_MeanImpulses);
 
-          #ifdef DEBUG
-            printf("DEBUG: Ampl: %d Mean: %.2f\n", gl_ush_MeanImpulses, CircleBufferAmplForT_mean( gl_sn_MeaningCounterRound));
-          #endif
+          if( gl_nAmplMeanCounter == 0.) {
+            gl_dblAmplMean = ( double) gl_ush_MeanImpulses;
+          }
+          else {
+            gl_dblAmplMean = ( gl_dblAmplMean * gl_nAmplMeanCounter + ( double) gl_ush_MeanImpulses) / ( gl_nAmplMeanCounter + 1);
+          }
+
+          gl_nAmplMeanCounter++;
+          if( gl_nAmplMeanCounter >= 150.)
+            gl_nAmplMeanCounter = 100.;
+
         }
 
         testPike();
@@ -2608,7 +2564,7 @@ void main() {
         // Выдача данных согласно протоколу
         //**********************************************************************
         switch( nSentPacksCounter) {
-          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_dblCircleBufferMean);      break; //UTD3
+          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_dblAmplMean);      break; //UTD3
           case 1: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 1, gl_ssh_Utd1);      break; //UTD1
           case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, flashParamAmplitudeCode);      break; //UTD2
           case 3: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 3, gl_ssh_current_1);      break; //I1
@@ -2706,33 +2662,30 @@ void main() {
         if( gl_nAmplStabStep < 10) {
           if( T2VAL <= nT2RepeatBang) {
             gl_nAmplStabStep++;
-            nT2RepeatBang = ( T2VAL - 32768) % T2LD;
-
-            gl_dblCircleBufferSumm = 0.;
-            gl_nCircleBufferAmplForTPositon = 0;
-            gl_bCircleBufferAmplForTOverRound = 0;
-            memset( gl_ushCircleBufferAmplForT, '\0', sizeof( gl_ushCircleBufferAmplForT));
+            nT2RepeatBang = ( T2VAL - 6553) % T2LD;
 
             gl_nAppliedMCoeff = 4096. * (1. - (1. - ( double) flashParamMCoeff / 250.) / 10. * ( double) gl_nAmplStabStep);
 
-            switch( gl_nAmplStabStep) {
-              case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  100;  gl_nDelta = 4; break;
-              case  1:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  200;  gl_nDelta = 4; break;
-              case  2:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  400;  gl_nDelta = 2; break;
-              case  3:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  800;  gl_nDelta = 2; break;
-              case  4:  gl_nAmplStabApplyRulaTacts = 2;  gl_nAmplStabMovAvWidth = 1000;  gl_nDelta = 2; break;
-              case  5:  gl_nAmplStabApplyRulaTacts = 4;  gl_nAmplStabMovAvWidth = 1500;  gl_nDelta = 2; break;
-              case  6:  gl_nAmplStabApplyRulaTacts = 5;  gl_nAmplStabMovAvWidth = 2000;  gl_nDelta = 1; break;
-              case  7:  gl_nAmplStabApplyRulaTacts = 10; gl_nAmplStabMovAvWidth = 2500;  gl_nDelta = 1; break;
-              case  8 : gl_nAmplStabApplyRulaTacts = 20; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
-              case  9:  gl_nAmplStabApplyRulaTacts = 40; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
-              case 10:  gl_nAmplStabApplyRulaTacts = 45; gl_nAmplStabMovAvWidth = 4500;  gl_nDelta = 1; break;
+            /*switch( gl_nAmplStabStep) {
+              case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nDelta = 4; break;
+              case  1:  gl_nAmplStabApplyRulaTacts = 2;  gl_nDelta = 4; break;
+              case  2:  gl_nAmplStabApplyRulaTacts = 3;  gl_nDelta = 2; break;
+              case  3:  gl_nAmplStabApplyRulaTacts = 4;  gl_nDelta = 2; break;
+              case  4:  gl_nAmplStabApplyRulaTacts = 5;  gl_nDelta = 2; break;
+              case  5:  gl_nAmplStabApplyRulaTacts = 6;  gl_nDelta = 2; break;
+              case  6:  gl_nAmplStabApplyRulaTacts = 7;  gl_nDelta = 1; break;
+              case  7:  gl_nAmplStabApplyRulaTacts = 8;  gl_nDelta = 1; break;
+              case  8 : gl_nAmplStabApplyRulaTacts = 9;  gl_nDelta = 1; break;
+              case  9:  gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1; break;
+              case 10:  gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1; break;
             }
+            */
+            gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1;
           }
         }
 
-        dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblCircleBufferMean;
-        if( ( gl_nCircleBufferAmplForTPositon % gl_nAmplStabApplyRulaTacts) == 0) {
+        dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblAmplMean;
+        if( ( gl_nAmplMeanCounter % gl_nAmplStabApplyRulaTacts) == 0) {
 
           //если расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
           if( fabs( dblDelta) > 0.5) {
