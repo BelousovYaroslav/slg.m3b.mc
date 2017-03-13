@@ -2505,9 +2505,10 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
+        /*
         if( ADCChannel == 2) ADCChannel=8;
         else if( ADCChannel == 8) ADCChannel=4;
-        else
+        else*/
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
@@ -2564,9 +2565,9 @@ void main() {
         // Выдача данных согласно протоколу
         //**********************************************************************
         switch( nSentPacksCounter) {
-          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_dblAmplMean);      break; //UTD3
+          case 0: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 0, gl_ssh_Utd3);      break; //UTD3
           case 1: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 1, gl_ssh_Utd1);      break; //UTD1
-          case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, flashParamAmplitudeCode);      break; //UTD2
+          case 2: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 2, gl_ssh_Utd2);      break; //UTD2
           case 3: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 3, gl_ssh_current_1);      break; //I1
           case 4: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 4, gl_ssh_current_2);      break; //I2
           case 5: send_pack( ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536, 5, gl_ssh_Perim_Voltage);  break; //CntrPc
