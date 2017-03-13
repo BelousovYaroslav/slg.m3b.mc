@@ -60,7 +60,7 @@ unsigned short gl_ush_MeanImpulses = 1;
 //unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V  
 //unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V  
 unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V  
-unsigned int gl_un_PrevAmplRegulationT2;
+
 
 
 int nT2RepeatBang;
@@ -134,8 +134,17 @@ int gl_nAppliedMCoeff;
 
 
 int gl_nAmplStabStep = 0; //плавное введение ошумления
+
 double gl_dblAmplMean;
 int  gl_nAmplMeanCounter;
+unsigned int gl_un_PrevAmplRegulationT2;
+
+double gl_dblMeanAbsDn;
+double gl_dblMeanAbsDu;
+int    gl_nMeanDecCoeffCounter;
+unsigned int gl_un_PrevT2DecCoeffCalc;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //обработчик прерываний
 void FIQ_Handler (void)	__fiq
@@ -1257,9 +1266,6 @@ void main() {
   char bSAFake = 0;
   int prt2val;
 
-  double db_dN1, db_dN2, dbU1, dbU2;
-  float Coeff;
-
   double V_piezo;
   double temp_t;
 
@@ -1270,6 +1276,10 @@ void main() {
   signed short ssh_dU;
   char cChkSm;
 
+  double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
+  float Coeff;
+
+  double dbl_dN, dbl_dU;
 
   bCalibProcessState = 0;    //0 - no calibration
 
@@ -1280,8 +1290,6 @@ void main() {
                              //4 - processing max_t_point 1st thermosensor
                              //5 - processing max_t_point 2nd thermosensor
                              //6 - processing max_t_point 3rd thermosensor
-
-
 
   // Setup tx & rx pins on P1.0 and P1.1
   GP0CON = 0x00;
@@ -1854,8 +1862,20 @@ void main() {
 
 #endif
 
+  //иницилизация переменных рассчёта скользящей средней амплитуды
+  gl_dblAmplMean = 0.;
+  gl_nAmplMeanCounter = 0;
+
+  //инициализация переменных рассчёта скользящей средней коэффициента вычета
+  gl_dblMeanAbsDn = 0.;
+  gl_dblMeanAbsDu = 0.;
+  gl_nMeanDecCoeffCounter = 0;
+
   nT2RepeatBang = ( T2VAL - 32768) % T2LD;
   gl_un_PrevAmplRegulationT2 = T2VAL;
+  gl_un_PrevT2DecCoeffCalc = T2VAL;
+
+
   //**********************************************************************
   //**********************************************************************
   //******************* ОСНОВНОЙ ЦИКЛ РАБОТЫ ПРОГРАММЫ *******************
@@ -2512,9 +2532,9 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        if( ADCChannel == 2) ADCChannel=8;
+        /*if( ADCChannel == 2) ADCChannel=8;
         else if( ADCChannel == 8) ADCChannel=4;
-        else
+        else*/
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
@@ -2603,6 +2623,44 @@ void main() {
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
         if( gl_b_SyncMode) {
 
+          dbl_dN = fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
+          dbl_dU = fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
+
+          if( gl_nMeanDecCoeffCounter > 0) {
+
+            gl_dblMeanAbsDn = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDn + dbl_dN) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
+            gl_dblMeanAbsDu = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDu + dbl_dU) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
+
+            dbl_N1 = ( double) gl_ssh_angle_inc_prev;
+            dbl_N2 = ( double) gl_ssh_angle_inc;
+            dbl_U1  = ( double) gl_ssh_angle_hanger_prev;
+            dbl_U2  = ( double) gl_ssh_angle_hanger;
+
+            Coeff = (( float) flashParamDecCoeff) / 65535.;
+
+            gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
+            if( fabs( gl_dbl_Omega) < 5) {
+
+              if( ++gl_nMeanDecCoeffCounter > 10000)
+              gl_nMeanDecCoeffCounter = 10000;
+
+              if( (( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL)) % T2LD >= 32768) {
+                gl_un_PrevT2DecCoeffCalc = T2VAL;
+
+                flashParamDecCoeff = ( short) ( ( int) ( gl_dblMeanAbsDn / gl_dblMeanAbsDu * 65535.));
+                nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+              }
+            }
+
+          }
+          else {
+            gl_dblMeanAbsDn = dbl_dN;
+            gl_dblMeanAbsDu = dbl_dU;
+            gl_un_PrevT2DecCoeffCalc = T2VAL;
+            gl_nMeanDecCoeffCounter++;
+          }
+
+          /*
           db_dN1 = ( double) gl_ssh_angle_inc_prev;
           db_dN2 = ( double) gl_ssh_angle_inc;
           dbU1 = ( double) gl_ssh_angle_hanger_prev;
@@ -2624,6 +2682,7 @@ void main() {
               nSentPacksRound = LONG_OUTPUT_PACK_LEN;
             }
           }
+          */
         }
 
 
@@ -2667,7 +2726,7 @@ void main() {
 
         testPike();
 
-		    //**********************************************************************
+        //**********************************************************************
         //Стабилизация амплитуды колебаний виброподвеса
         //**********************************************************************
         if( gl_nAmplStabStep < 10) {
