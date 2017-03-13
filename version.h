@@ -1,3 +1,3 @@
 #define VERSION_MAJOR 4
 #define VERSION_MIDDLE 0
-#define VERSION_MINOR 7
+#define VERSION_MINOR 8

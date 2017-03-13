@@ -66,8 +66,8 @@ unsigned short gl_ush_MeanImpulses = 1;
 //unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V
 unsigned int gl_un_RULAControl = 4095;    //4095 = 2.500 V
 
-//unsigned char delta = ( RULA_MAX - RULA_MIN) / 2;
-unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 2;
+//unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 2;
+unsigned int gl_nDelta = 4;
 
 #define MEANING_IMP_PERIOD_100 100
 #define MEANING_IMP_PERIOD_200 200
@@ -2182,7 +2182,7 @@ void main() {
           gl_un_RULAControl = ( RULA_MAX - RULA_MIN) / 2;
 
           //nDelta = ( RULA_MAX - RULA_MIN) / 2;
-          nDelta = 10;
+          gl_nDelta = 10;
 
           //отключаем ошумление
           gl_nAppliedMCoeff = 4096;
@@ -2201,7 +2201,7 @@ void main() {
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
           gl_nAmplStabMovAvWidth =  100;
-
+          gl_nDelta = 4;
         break;
 
         case 1: //установить код такта подставки
@@ -2217,7 +2217,7 @@ void main() {
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
           gl_nAmplStabMovAvWidth =  100;
-
+          gl_nDelta = 4;
         break;
 
         case 2: //установить коэффициент M
@@ -2236,6 +2236,7 @@ void main() {
           gl_nAmplStabStep = 0;
           gl_nAmplStabApplyRulaTacts = 1;
           gl_nAmplStabMovAvWidth =  100;
+          gl_nDelta = 4;
         break;
 
         case 3: //установить начальную моду
@@ -2753,17 +2754,17 @@ void main() {
             gl_nAppliedMCoeff = 4096. * (1. - (1. - ( double) flashParamMCoeff / 250.) / 10. * ( double) gl_nAmplStabStep);
 
             switch( gl_nAmplStabStep) {
-              case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  100;  break;
-              case  1:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  200;  break;
-              case  2:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  400;  break;
-              case  3:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  800;  break;
-              case  4:  gl_nAmplStabApplyRulaTacts = 2;  gl_nAmplStabMovAvWidth = 1000;  break;
-              case  5:  gl_nAmplStabApplyRulaTacts = 4;  gl_nAmplStabMovAvWidth = 1500;  break;
-              case  6:  gl_nAmplStabApplyRulaTacts = 5;  gl_nAmplStabMovAvWidth = 2000;  break;
-              case  7:  gl_nAmplStabApplyRulaTacts = 10; gl_nAmplStabMovAvWidth = 2500;  break;
-              case  8 : gl_nAmplStabApplyRulaTacts = 20; gl_nAmplStabMovAvWidth = 3000;  break;
-              case  9:  gl_nAmplStabApplyRulaTacts = 40; gl_nAmplStabMovAvWidth = 3000;  break;
-              case 10:  gl_nAmplStabApplyRulaTacts = 45; gl_nAmplStabMovAvWidth = 3000;  break;
+              case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  100;  gl_nDelta = 4; break;
+              case  1:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  200;  gl_nDelta = 4; break;
+              case  2:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  400;  gl_nDelta = 2; break;
+              case  3:  gl_nAmplStabApplyRulaTacts = 1;  gl_nAmplStabMovAvWidth =  800;  gl_nDelta = 2; break;
+              case  4:  gl_nAmplStabApplyRulaTacts = 2;  gl_nAmplStabMovAvWidth = 1000;  gl_nDelta = 2; break;
+              case  5:  gl_nAmplStabApplyRulaTacts = 4;  gl_nAmplStabMovAvWidth = 1500;  gl_nDelta = 2; break;
+              case  6:  gl_nAmplStabApplyRulaTacts = 5;  gl_nAmplStabMovAvWidth = 2000;  gl_nDelta = 1; break;
+              case  7:  gl_nAmplStabApplyRulaTacts = 10; gl_nAmplStabMovAvWidth = 2500;  gl_nDelta = 1; break;
+              case  8 : gl_nAmplStabApplyRulaTacts = 20; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
+              case  9:  gl_nAmplStabApplyRulaTacts = 40; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
+              case 10:  gl_nAmplStabApplyRulaTacts = 45; gl_nAmplStabMovAvWidth = 3000;  gl_nDelta = 1; break;
             }
           }
         }
@@ -2775,9 +2776,11 @@ void main() {
           if( fabs( dblDelta) > 0.5) {
 
             if( dblDelta > 0)
-              gl_un_RULAControl++;
+              //gl_un_RULAControl++;
+              gl_un_RULAControl += gl_nDelta;
             else
-              gl_un_RULAControl--;
+              //gl_un_RULAControl--;
+              gl_un_RULAControl -= gl_nDelta;
           }
         }
 
