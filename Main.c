@@ -2139,6 +2139,11 @@ void main() {
         case 7: //установить коэффициент вычета
           flashParamDecCoeff = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
           nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+
+		  //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
+		  gl_nMeanDecCoeffCounter = 0;
+		  gl_dblMeanAbsDn = 0.;
+		  gl_dblMeanAbsDu = 0.;
         break;
 
         case 8: //установить SA такт
@@ -2533,9 +2538,9 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        if( ADCChannel == 2) ADCChannel=8;
+        /*if( ADCChannel == 2) ADCChannel=8;
         else if( ADCChannel == 8) ADCChannel=4;
-        else
+        else*/
           ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
 
 
@@ -2623,7 +2628,7 @@ void main() {
         }
 
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
-        if( gl_b_SyncMode) {
+        if( gl_b_SyncMode && nSentPacksCounter > 0) {
 
           dbl_dN = fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
           dbl_dU = fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
