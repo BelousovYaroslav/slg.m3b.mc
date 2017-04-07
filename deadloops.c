@@ -25,6 +25,7 @@ extern signed short gl_ssh_ampl_angle;
 
 extern char input_buffer[];
 extern char pos_in_in_buf;
+
 extern void send_pack( signed short angle_inc1, short param_indicator, short analog_param);
 
 extern void pause_T0 ( int n);

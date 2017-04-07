@@ -8,16 +8,11 @@
 #include "errors.h"
 #include "version.h"
 #include "deadloops.h"
+#include "settings.h"
 #include "Main.h"
 
 #define LONG_OUTPUT_PACK_LEN 24       //когда запрашивают мы выдаем 25 пачки (со всеми доп. параметрами по очереди)
 #define SHORT_OUTPUT_PACK_LEN 7       //в норме мы выдаем циклически по 7 пачек с аналог. параметрами
-
-//#define HIRO_COEFF   1.      //большой гироскоп
-//#define HIRO_COEFF  -1.      //маленький гироскоп
-
-//#define DEBUG
-//#define SKIP_START_CHECKS
 
 //********************
 // Decrement coefficient calculation
@@ -65,11 +60,22 @@ unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V
 
 int nT2RepeatBang;
 
-char gl_n_PerimeterReset = 0;         //0 - рабочий режим   1 - выключили интегратор   2 - интегратор включили
+
 char gl_c_EmergencyCode = 0;
-char gl_b_SA_Processed = 0;	          //флаг окончания обработки сигнала SA
-char gl_b_SyncMode = 0;               //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
+
+
 char bAsyncDu = 0;                    //флаг передачи времени SA или приращ. угла в асинхр. режиме: 0-передается SA 1-передается dU
+
+
+//ФЛАГИ
+char gl_b_SyncMode = 0;               //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
+//char gl_chAngleOutput = 0;            //флаг вывода приращения угла: 0 = dW (4b)         1 = dN (2b), dU(2b)
+//char gl_chLockBit = 0;                //флаг блокирования устройства: 0 - режим "разработчика"   1 - режим "пользователя"
+//char gl_bOutData = 0;                 //флаг выдачи данных наружу (включается через 2.5 сек после включения прибора) 0 - нет выдачи; 1 - выдача данных;
+char gl_n_PerimeterReset = 0;         //флаг сигнала сброса периметра (0 = данные достоверны, 1 = данные НЕдостоверны, прошло выключение интегратора, 2 = данные НЕдостоверны, прошло включение интегратора)
+char gl_b_SA_Processed = 0;           //флаг окончания обработки сигнала SA
+char gl_bManualLaserOff = 0;          //флаг что сами выключили ток лазера (командой). Флаг нужен чтобы исключить это событие в отслеживателе просадок тока.
+
 
 short nSentPacksCounter = 0;                    //счетчик посылок
 int nSentPacksRound = SHORT_OUTPUT_PACK_LEN;    //круг счетчика посылок
@@ -95,22 +101,33 @@ int ADCChannel = 0; //читаемый канал АЦП
 #define BIT_7 128
 
 
-char input_buffer[6] = { 0, 0, 0, 0, 0, 0};
-char pos_in_in_buf = 0;
+#define IN_COMMAND_BUF_LEN 3                    //длина буфера входящих команд
+char input_buffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
+char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
 
-unsigned short flashParamAmplitudeCode = 9000, flashParamTactCode = 0, flashParamMCoeff = 4, flashParamStartMode = 5;
-unsigned int flashParamDeviceId = 0;
-char flashParamOrg[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};
-unsigned short flashParamDateYear = 0, flashParamDateMonth = 0, flashParamDateDay = 0;
-unsigned short flashParamI1min = 0;
-unsigned short flashParamI2min = 0;
-unsigned short flashParamAmplAngMin1 = 0;
-unsigned short flashParamDecCoeff = 0;
-unsigned short flashParamSignCoeff = 2;
-unsigned short flashParamPhaseShift = 0;
+//ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
+unsigned short flashParamAmplitudeCode = 9000;    //амплитуда колебаний виброподвеса
+unsigned short flashParamTactCode = 0;            //код такта ошумления
+unsigned short flashParamMCoeff = 4;              //коэффициент ошумления
+unsigned short flashParamStartMode = 5;           //начальная мода Системы Регулировки Периметра
+unsigned short flashParamDecCoeff = 0;            //коэффициент вычета
+//unsigned short flashLockDev = 0;                //флаг блокировки устройства
 
-unsigned short gl_ushFlashParamLastRULA = 0;
-unsigned short gl_ushFlashParamLastRULM = 0;
+unsigned short flashParamI1min = 0;               //контрольное значение тока поджига I1
+unsigned short flashParamI2min = 0;               //контрольное значение тока поджига I2
+unsigned short flashParamAmplAngMin1 = 0;         //контрольное значение сигнала раскачки с ДУСа
+
+
+unsigned short flashParamSignCoeff = 2;           //знаковый коэффициент
+unsigned int flashParamDeviceId = 0;              //ID устройства
+unsigned short flashParamDateYear = 0;            //дата ? прибора.год
+unsigned short flashParamDateMonth = 0;           //дата ? прибора.месяц
+unsigned short flashParamDateDay = 0;             //дата ? прибора.день
+char flashParamOrg[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};    //название организации
+unsigned short flashParamPhaseShift = 0;          //фазовый сдвиг (obsolete)
+
+unsigned short gl_ushFlashParamLastRULA = 0;      //последнее RULA (obsolete)
+unsigned short gl_ushFlashParamLastRULM = 0;      //последнее RULM (obsolete)
 
 double dStartAmplAngCheck = 0.5;
 
@@ -122,17 +139,12 @@ unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
 signed short flashParam_calibT2;
 unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
 
-char bCalibProcessState;
-#define MIN_T_THERMO_CALIBRATION -60
-#define MAX_T_THERMO_CALIBRATION 60
-#define THERMO_CALIB_PARAMS_BASE 10000
-char bCalibrated;
+char gl_bCalibProcessState;
+char gl_bCalibrated;
 double TD1_K, TD1_B;
 double TD2_K, TD2_B;
 
 int gl_nAppliedMCoeff;
-
-
 int gl_nAmplStabStep = 0; //плавное введение ошумления
 
 double gl_dblAmplMean;
@@ -172,8 +184,6 @@ void pause( int n) {
     chk = (( T1LD + prval - T1VAL) % T1LD);
 }
 
-
-
 double round( double val) {
   double lstd = val - floor( val);
   if( lstd < .5) return floor( val);
@@ -199,6 +209,7 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
   signed short ssh_dN, ssh_dU;
   signed int n_dN, n_dU;
   double result;
+  char bt;
 
   /*
   char b1 = 0, b2 = 0;
@@ -363,8 +374,23 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
   //***************************************************************************
   //EMERGENCY CODE
   //***************************************************************************
-  putchar_nocheck( gl_c_EmergencyCode);
-  cCheckSumm += gl_c_EmergencyCode;
+  //8 bit - 0x80 - veracity
+  bt = ( gl_n_PerimeterReset ? 0x80 : 0x00);
+
+  //7 bit - 0x40 - lock bit
+  //bt += ( gl_chLockBit ? 0x40 : 0x00);
+
+  //6 bit - 0x20 - Sync (0)/Async(1) regime
+  bt += ( gl_b_SyncMode ? 0x20 : 0x00);
+
+  //5 bit - 0x10 - W (0) / dNdU (1) regime
+  //bt += ( gl_chAngleOutput ? 0x10 : 0x00);
+
+  //Error code (lower 4 byte)
+  bt += gl_c_EmergencyCode;
+
+  putchar_nocheck( bt);
+  cCheckSumm += bt;
 
   //***************************************************************************
   // CHECKSUM
@@ -391,343 +417,6 @@ void send_pack( signed short angle_inc1, short param_indicator, short analog_par
           );
   */
 #endif
-}
-
-void load_params( void) {
-  //код амплитуды
-  if( flashEE_load_short( 0xf000, &flashParamAmplitudeCode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //код такта подставки
-  if( flashEE_load_short( 0xf002, &flashParamTactCode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //коэффициент М
-  if( flashEE_load_short( 0xf004, &flashParamMCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Начальная мода
-  if( flashEE_load_short( 0xf006, &flashParamStartMode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //серийный номер
-  if( flashEE_load_int( 0xf008, &flashParamDeviceId)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //организация
-  if( flashEE_load_text( 0xf00C, flashParamOrg, 16)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  } 
-  //год
-  if( flashEE_load_short( 0xf02C, &flashParamDateYear)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //месяц
-  if( flashEE_load_short( 0xf02E, &flashParamDateMonth)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //день
-  if( flashEE_load_short( 0xf030, &flashParamDateDay)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //минимальный ток I1
-  if( flashEE_load_short( 0xf032, &flashParamI1min)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //минимальный ток I2
-  if( flashEE_load_short( 0xf034, &flashParamI2min)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //минимальный AmplAng
-  if( flashEE_load_short( 0xf036, &flashParamAmplAngMin1)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //коэффициент вычета
-  if( flashEE_load_short( 0xf038, &flashParamDecCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //знаковый коэффициент
-  if( flashEE_load_short( 0xf03A, &flashParamSignCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-
-  //**************************************************************************************
-  // КАЛИБРОВКА ТЕРМОДАТЧИКОВ
-  //**************************************************************************************
-  //Температура минимальной точки калибровки
-  if( flashEE_load_short( 0xf03C, ( unsigned short *) &flashParam_calibT1)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Отсчёты первого термодатчика при минимальной температуре калибровки
-  if( flashEE_load_short( 0xf03E, &flashParamT1_TD1_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Отсчёты второго термодатчика при минимальной температуре калибровки
-  if( flashEE_load_short( 0xf040, &flashParamT1_TD2_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Температура максимальной точки калибровки
-  if( flashEE_load_short( 0xf042, ( unsigned short *) &flashParam_calibT2)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Отсчёты первого термодатчика при максимальной температуре калибровки
-  if( flashEE_load_short( 0xf044, &flashParamT2_TD1_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-  //Отсчёты второго термодатчика при максимальной температуре калибровки
-  if( flashEE_load_short( 0xf046, &flashParamT2_TD2_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-
-  //********************************************************************
-  // параметр сдвига
-  if( flashEE_load_short( 0xf048, &flashParamPhaseShift)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-
-  //последнее RULA
-  if( flashEE_load_short( 0xf04A, &gl_ushFlashParamLastRULA)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-
-  //последнее RULM
-  if( flashEE_load_short( 0xf04C, &gl_ushFlashParamLastRULM)) {
-    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  }
-
-#ifdef DEBUG
-  printf("DEBUG: load_params(): params loaded from flash memory. Here they are:\n");
-  printf("DEBUG:   Amplitude Code: 0x%04x (%04d)\n", flashParamAmplitudeCode, flashParamAmplitudeCode); //код амплитуды
-  printf("DEBUG:   Base Tact Code: 0x%04x (%04d)\n", flashParamTactCode, flashParamTactCode);   //код такта подставки
-  printf("DEBUG:   M Coefficient:  0x%04x (%04d)\n", flashParamMCoeff, flashParamMCoeff);       //коэффициент М
-  printf("DEBUG:   Start Mode:     0x%04x (%04d)\n", flashParamStartMode, flashParamStartMode); //Начальная мода
-  printf("DEBUG:   Serial number:  0x%04x (%04d)\n", flashParamDeviceId, flashParamDeviceId);   //серийный номер
-  printf("DEBUG:   Organization:   '%s'\n", flashParamOrg);                                     //организация
-  printf("DEBUG:   Year:           0x%04x (%04d)\n", flashParamDateYear, flashParamDateYear);   //год
-  printf("DEBUG:   Month:          0x%04x (%04d)\n", flashParamDateMonth, flashParamDateMonth); //месяц
-  printf("DEBUG:   Day:            0x%04x (%04d)\n", flashParamDateDay, flashParamDateDay);     //день
-  printf("DEBUG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);         //минимальный ток I1
-  printf("DEBUG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);         //минимальный ток I2
-  printf("DEBUG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1); //минимальный AmplAng
-  printf("DEBUG:   Dec. Coeff:     0x%04x (%04d)\n", flashParamDecCoeff, flashParamDecCoeff);   //коэффициент вычета
-  printf("DEBUG:   Sign coeff:     0x%04x (%04d)\n", flashParamSignCoeff, flashParamSignCoeff); //знаковый коэффициент
-  printf("DEBUG:   Phase shift:    0x%04x (%04d)\n", flashParamPhaseShift, flashParamPhaseShift); //фазовый сдвиг
-  printf("DEBUG:   Last RULA:      0x%04x (%04d)\n", gl_ushFlashParamLastRULA, gl_ushFlashParamLastRULA);   //последнее RULA
-  printf("DEBUG:   Last RULM:      0x%04x (%04d)\n", gl_ushFlashParamLastRULM, gl_ushFlashParamLastRULM);   //последнее RULM
-#endif
-
-  //PARAMS CHECKING
-  if( flashParamAmplitudeCode > 25500)     //Код амплитуды [0-25500]. дефолтное значение 9000
-    flashParamAmplitudeCode = 9000;        //9000 для большого 3500 для маленького
-
-  if( flashParamTactCode > 3)       //Код такта амплитуды [0-3]. дефолтное значение 0
-    flashParamTactCode = 0;
-
-  if( flashParamMCoeff > 250)     //Коэффициент М[0-1] = значения параметра [0-250].
-    flashParamMCoeff = 125;       //дефолтное значение 125 (что означает M=0.5 и DAC1 = 0.5 * DAC0)  
-
-  if( flashParamStartMode > 250)     //Начальная мода [0-250]. дефолтное значение 125 (что означает 1,25В на DAC2)
-    flashParamStartMode = 125;
-
-  //device_id = 0;
-  //organization[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};
-
-  if( flashParamDateYear < 2000 && flashParamDateYear > 2200)
-    flashParamDateYear = 2009;
-
-  if( flashParamDateMonth > 12)
-    flashParamDateMonth = 9;
-
-  if( flashParamDateDay > 31)
-    flashParamDateDay = 3;
-
-/*
-  if( flashParamI1min > 255)
-    flashParamI1min = 0;
-
-  if( flashParamI2min > 255)
-    flashParamI2min = 0;
-
-  if( flashParamAmplAngMin1 > 255)
-    flashParamAmplAngMin1 = 0;
-*/
-
-  if( flashParamDecCoeff == 0xffff)
-    flashParamDecCoeff = 0;
-
-  if( flashParamSignCoeff > 2)
-    flashParamSignCoeff = 2;
-
-  if( flashParam_calibT1 < ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION)  ||
-      flashParam_calibT1 > ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
-    flashParam_calibT1 = 0;
-    flashParamT1_TD1_val = 0;
-    flashParamT1_TD2_val = 1;
-  }
-
-  if( flashParam_calibT2 < ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) ||
-      flashParam_calibT2 > ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
-    flashParam_calibT2 = 0;
-    flashParamT2_TD1_val = 0;
-    flashParamT2_TD2_val = 1;
-  }
-
-  if( flashParamPhaseShift > 63) {
-    flashParamPhaseShift = 0;
-  }
-
-  if( gl_ushFlashParamLastRULA > 4096) {
-    gl_ushFlashParamLastRULA = 0;
-  }
-
-  if( gl_ushFlashParamLastRULM > 4096) {
-    gl_ushFlashParamLastRULM = 0;
-  }
-#ifdef DEBUG
-  printf("DEBUG: load_params(): params checked for the range. Here they are:\n");
-  printf("DEBUG:   Amplitude Code: 0x%04x (%04d)\n", flashParamAmplitudeCode, flashParamAmplitudeCode); //код амплитуды
-  printf("DEBUG:   Base Tact Code: 0x%04x (%04d)\n", flashParamTactCode, flashParamTactCode);   //код такта подставки
-  printf("DEBUG:   M Coefficient:  0x%04x (%04d)\n", flashParamMCoeff, flashParamMCoeff);       //коэффициент М
-  printf("DEBUG:   Start Mode:     0x%04x (%04d)\n", flashParamStartMode, flashParamStartMode); //Начальная мода
-  printf("DEBUG:   Serial number:  0x%04x (%04d)\n", flashParamDeviceId, flashParamDeviceId);   //серийный номер
-  printf("DEBUG:   Organization:   '%s'\n", flashParamOrg);                                     //организация
-  printf("DEBUG:   Year:           0x%04x (%04d)\n", flashParamDateYear, flashParamDateYear);   //год
-  printf("DEBUG:   Month:          0x%04x (%04d)\n", flashParamDateMonth, flashParamDateMonth); //месяц
-  printf("DEBUG:   Day:            0x%04x (%04d)\n", flashParamDateDay, flashParamDateDay);     //день
-  printf("DEBUG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);         //минимальный ток I1
-  printf("DEBUG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);         //минимальный ток I2
-  printf("DEBUG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1); //минимальный AmplAng
-  printf("DEBUG:   Dec. Coeff:     0x%04x (%04d)\n", flashParamDecCoeff, flashParamDecCoeff);   //коэффициент вычета
-  printf("DEBUG:   Sign coeff:     0x%04x (%04d)\n", flashParamSignCoeff, flashParamSignCoeff); //знаковый коэффициент
-  printf("DEBUG:   Phase shift:    0x%04x (%04d)\n", flashParamPhaseShift, flashParamPhaseShift); //фазовый сдвиг
-  printf("DEBUG:   Last RULA:      0x%04x (%04d)\n", gl_ushFlashParamLastRULA, gl_ushFlashParamLastRULA);   //последнее RULA
-  printf("DEBUG:   Last RULM:      0x%04x (%04d)\n", gl_ushFlashParamLastRULM, gl_ushFlashParamLastRULM);   //последнее RULM
-#endif
-}
-
-void SaveThermoCalibPoint( void) {
-  if( flashEE_save_short( 0xf03C, flashParam_calibT1)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf03E, flashParamT1_TD1_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf040, flashParamT1_TD2_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf042, flashParam_calibT2)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf044, flashParamT2_TD1_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf046, flashParamT2_TD2_val)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-}
-
-void save_params( void) {
-#ifdef DEBUG
-  printf("DEBUG: save_params(): params to be saved are:\n");
-  printf("DEBUG:   Amplitude Code: 0x%04x (%04d)\n", flashParamAmplitudeCode, flashParamAmplitudeCode); //код амплитуды
-  printf("DEBUG:   Base Tact Code: 0x%04x (%04d)\n", flashParamTactCode, flashParamTactCode);   //код такта подставки
-  printf("DEBUG:   M Coefficient:  0x%04x (%04d)\n", flashParamMCoeff, flashParamMCoeff);       //коэффициент М
-  printf("DEBUG:   Start Mode:     0x%04x (%04d)\n", flashParamStartMode, flashParamStartMode); //Начальная мода
-  printf("DEBUG:   Serial number:  0x%04x (%04d)\n", flashParamDeviceId, flashParamDeviceId);   //серийный номер
-  printf("DEBUG:   Organization:   '%s'\n", flashParamOrg);                                     //организация
-  printf("DEBUG:   Year:           0x%04x (%04d)\n", flashParamDateYear, flashParamDateYear);   //год
-  printf("DEBUG:   Month:          0x%04x (%04d)\n", flashParamDateMonth, flashParamDateMonth); //месяц
-  printf("DEBUG:   Day:            0x%04x (%04d)\n", flashParamDateDay, flashParamDateDay);     //день
-  printf("DEBUG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);         //минимальный ток I1
-  printf("DEBUG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);         //минимальный ток I2
-  printf("DEBUG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1); //минимальный AmplAng
-  printf("DEBUG:   Dec. Coeff:     0x%04x (%04d)\n", flashParamDecCoeff, flashParamDecCoeff);   //коэффициент вычета
-  printf("DEBUG:   Sign coeff:     0x%04x (%04d)\n", flashParamSignCoeff, flashParamSignCoeff); //Знаковый коэффициент
-  printf("DEBUG:   Phase shift:    0x%04x (%04d)\n", flashParamPhaseShift, flashParamPhaseShift); //фазовый сдвиг
-#endif
-
-  if( flashEE_erase_page( 0xf000)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf000, flashParamAmplitudeCode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf002, flashParamTactCode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf004, flashParamMCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf006, flashParamStartMode)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_int( 0xf008, flashParamDeviceId)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_text( 0xf00C, flashParamOrg, 16)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  } 
-  if( flashEE_save_short( 0xf02C, flashParamDateYear)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf02E, flashParamDateMonth)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf030, flashParamDateDay)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf032, flashParamI1min)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf034, flashParamI2min)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf036, flashParamAmplAngMin1)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf038, flashParamDecCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xf03A, flashParamSignCoeff)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  //0xf03C - 0xf046 включительно - калибровочные данные термодатчиков
-  SaveThermoCalibPoint();
-
-  if( flashEE_save_short( 0xf048, flashParamPhaseShift)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-
-  if( flashEE_save_short( 0xF04A, gl_ushFlashParamLastRULA)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
-  if( flashEE_save_short( 0xF04C, gl_ushFlashParamLastRULM)) {
-    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
-    return;
-  }
 }
 
 void configure_hanger( void) {
@@ -1035,10 +724,10 @@ void ThermoCalibrationCalculation( void)
     TD2_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
     TD2_K = ( y2 - y1) / ( x2 - x1);
 
-    bCalibrated = 1;
+    gl_bCalibrated = 1;
   }
   else
-    bCalibrated = 0;
+    gl_bCalibrated = 0;
 }
 
 void InitBaudRate115200() {
@@ -1282,7 +971,7 @@ void main() {
 
   double dbl_dN, dbl_dU;
 
-  bCalibProcessState = 0;    //0 - no calibration
+  gl_bCalibProcessState = 0;    //0 - no calibration
 
                              //1 - processing min_t_point 1st thermosensor
                              //2 - processing min_t_point 2nd thermosensor
@@ -1291,6 +980,7 @@ void main() {
                              //4 - processing max_t_point 1st thermosensor
                              //5 - processing max_t_point 2nd thermosensor
                              //6 - processing max_t_point 3rd thermosensor
+
 
   // Setup tx & rx pins on P1.0 and P1.1
   GP0CON = 0x00;
@@ -2161,7 +1851,7 @@ void main() {
         break;
 
         case 11: //калибровка термодатчиков (параметр - реальная температура)
-          bCalibrated = 0;
+          gl_bCalibrated = 0;
           in_param_temp  = input_buffer[1] + ( ( ( short) input_buffer[2]) << 8);
           if( flashParam_calibT1 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) && 
               flashParam_calibT1 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
@@ -2179,18 +1869,18 @@ void main() {
                 //определим какую надо заменить
                 if( in_param_temp < flashParam_calibT1) {
                   //надо заменить минимальную
-                  bCalibProcessState = 1;
+                  gl_bCalibProcessState = 1;
                   flashParam_calibT1 = in_param_temp;
                 }
                 else {
                   //надо заменить максимальную
-                  bCalibProcessState = 3;
+                  gl_bCalibProcessState = 3;
                   flashParam_calibT2 = in_param_temp;
                 }
               }
               else {
                 //у нас есть нормальная минимальная точка калибровки, но нет нормальной максимальной
-                bCalibProcessState = 3;
+                gl_bCalibProcessState = 3;
                 flashParam_calibT2 = in_param_temp;
               }
 
@@ -2198,12 +1888,12 @@ void main() {
           else {
             //у нас нет даже минимальной точки!! значит это будет минимальная :)
             flashParam_calibT1 = in_param_temp;
-            bCalibProcessState = 1;
+            gl_bCalibProcessState = 1;
           }
         break;
 
         case 12:    //команда сброса данных калибровки термодатчиков
-          bCalibrated = 0;
+          gl_bCalibrated = 0;
           flashParam_calibT1 = 0;
           flashParamT1_TD1_val = 0;
           flashParamT1_TD2_val = 0;
@@ -2444,7 +2134,7 @@ void main() {
           case 0: //UTD3
             gl_ssh_Utd3 = (ADCDAT >> 16);
             gl_ssh_Utd3_cal = gl_ssh_Utd3;
-            if( bCalibrated)
+            if( gl_bCalibrated)
               temp_t = ( double) gl_ssh_Utd3 * TD1_K + TD1_B;
             else
               temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd3 / 4096. * 2.5) / 3.88e-6));
@@ -2454,7 +2144,7 @@ void main() {
           case 1: //UTD1
             gl_ssh_Utd1 = (ADCDAT >> 16);
             gl_ssh_Utd1_cal = gl_ssh_Utd1;
-            if( bCalibrated)
+            if( gl_bCalibrated)
               temp_t = ( double) gl_ssh_Utd1 * TD1_K + TD1_B;
             else
               temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
@@ -2464,7 +2154,7 @@ void main() {
           case 2: //UTD2
             gl_ssh_Utd2 = (ADCDAT >> 16);
             gl_ssh_Utd2_cal = gl_ssh_Utd2;
-            if( bCalibrated)
+            if( gl_bCalibrated)
               temp_t = ( double) gl_ssh_Utd2 * TD1_K + TD1_B;
             else
               temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd2 / 4096. * 2.5) / 3.88e-6));
@@ -2478,13 +2168,13 @@ void main() {
           case 8: gl_ssh_current_1 = (ADCDAT >> 16); break;     //I1   TEMP!!!!!!!!!!!!!!!!!!!!
         }
 
-        if( bCalibProcessState) {
-          switch( bCalibProcessState) {
+        if( gl_bCalibProcessState) {
+          switch( gl_bCalibProcessState) {
             case 1:
               //калибруем первый датчик на минимальной температуре
               if( ADCChannel == 1) {
                 flashParamT1_TD1_val = gl_ssh_Utd1_cal;
-                bCalibProcessState = 2;
+                gl_bCalibProcessState = 2;
               }
             break;
 
@@ -2492,7 +2182,7 @@ void main() {
               //калибруем второй датчик на минимальной температуре
               if( ADCChannel == 2) {
                 flashParamT1_TD2_val = gl_ssh_Utd2_cal;
-                bCalibProcessState = 3;
+                gl_bCalibProcessState = 3;
               }
             break;
 
@@ -2500,7 +2190,7 @@ void main() {
               //калибруем третий датчик на минимальной температуре
               if( ADCChannel == 0) {
                 flashParamT1_TD3_val = gl_ssh_Utd3_cal;
-                bCalibProcessState = 0;
+                gl_bCalibProcessState = 0;
                 SaveThermoCalibPoint();
                 nSentPacksRound = LONG_OUTPUT_PACK_LEN;
               }
@@ -2510,7 +2200,7 @@ void main() {
               //калибруем первый датчик на максимальной температуре
               if( ADCChannel == 1) {
                 flashParamT2_TD1_val = gl_ssh_Utd1_cal;
-                bCalibProcessState = 5;
+                gl_bCalibProcessState = 5;
               }
             break;
 
@@ -2518,14 +2208,14 @@ void main() {
               //калибруем второй датчик на максимальной температуре
               if( ADCChannel == 2) {
                 flashParamT2_TD2_val = gl_ssh_Utd2_cal;
-                bCalibProcessState = 6;
+                gl_bCalibProcessState = 6;
               }
 
             case 6:
               //калибруем третий датчик на максимальной температуре
               if( ADCChannel == 0) {
                 flashParamT2_TD3_val = gl_ssh_Utd3_cal;
-                bCalibProcessState = 0;
+                gl_bCalibProcessState = 0;
                 SaveThermoCalibPoint();
                 nSentPacksRound = LONG_OUTPUT_PACK_LEN;
               }
@@ -2533,7 +2223,7 @@ void main() {
             break;
           }
 
-          if( !bCalibProcessState)
+          if( !gl_bCalibProcessState)
             //если это закончилась калбировка какой либо точки - перерасчитаем калибровочные параметры
             ThermoCalibrationCalculation();
         }

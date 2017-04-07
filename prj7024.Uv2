@@ -13,6 +13,10 @@ File 1,1,<.\flashEE.c><flashEE.c> 0x0
 File 1,5,<.\flashEE.h><flashEE.h> 0x0 
 File 1,5,<.\errors.h><errors.h> 0x0 
 File 1,1,<.\deadloops.c><deadloops.c> 0x0 
+File 1,5,<.\deadloops.h><deadloops.h> 0x0 
+File 1,1,<.\settings.c><settings.c> 0x0 
+File 1,5,<.\settings.h><settings.h> 0x0 
+File 1,5,<.\version.h><version.h> 0x0 
 
 
 Options 1,0,0  // Target 'Target 1'
@@ -57,7 +61,7 @@ Options 1,0,0  // Target 'Target 1'
  BrunUsr 1 0 <>
  SVCSID <>
  KACPU (ARM7TDMI)
- TKAFL { 155,118,0,0,0,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+ TKAFL { 0,128,0,0,0,15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
  KIROM { 1,0,0,8,0,0,248,0,0 }
  KIRAM { 0,0,0,1,0,0,32,0,0 }
  KXRAM { 0,0,0,0,0,0,0,0,0 }
