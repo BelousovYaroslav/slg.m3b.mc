@@ -13,10 +13,18 @@ File 1,1,<.\flashEE.c><flashEE.c> 0x0
 File 1,5,<.\flashEE.h><flashEE.h> 0x0 
 File 1,5,<.\errors.h><errors.h> 0x0 
 File 1,1,<.\deadloops.c><deadloops.c> 0x0 
-File 1,5,<.\deadloops.h><deadloops.h> 0x0 
 File 1,1,<.\settings.c><settings.c> 0x0 
 File 1,5,<.\settings.h><settings.h> 0x0 
 File 1,5,<.\version.h><version.h> 0x0 
+File 1,1,<.\SimpleMaxRateRegime.c><SimpleMaxRateRegime.c> 0x0 
+File 1,5,<.\SimpleMaxRateRegime.h><SimpleMaxRateRegime.h> 0x0 
+File 1,5,<.\deadloops.h><deadloops.h> 0x0 
+File 1,5,<.\Main.h><Main.h> 0x0 
+File 1,5,<.\debug.h><debug.h> 0x0 
+File 1,1,<.\ProcessingIncomingCommand.c><ProcessingIncomingCommand.c> 0x0 
+File 1,5,<.\ProcessingIncomingCommand.h><ProcessingIncomingCommand.h> 0x0 
+File 1,5,<.\McCommands.h><McCommands.h> 0x0 
+File 1,5,<.\AnalogueParamsConstList.h><AnalogueParamsConstList.h> 0x0 
 
 
 Options 1,0,0  // Target 'Target 1'
@@ -45,7 +53,7 @@ Options 1,0,0  // Target 'Target 1'
  OrgReg (ÿADI\)
  TgStat=16
  OutDir (.\)
- OutName (slg_m3_mc_418)
+ OutName (slg_m3_mc_420)
  GenApp=1
  GenLib=0
  GenHex=1
