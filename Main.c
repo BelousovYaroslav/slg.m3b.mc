@@ -28,8 +28,12 @@ double gl_dbl_Omega;
 
 //********************
 
-signed short gl_ssh_angle_inc = 0;      //приращение угла
-signed short gl_ssh_angle_inc_prev = 0; //приращение угла
+signed short gl_ssh_angle_inc = 0;          //текущее значение с реверсивного счётчика (N2)
+signed short gl_ssh_angle_inc_prev = 0;     //предыдущее значение с реверсивного счётчика (N1)
+
+signed short gl_ssh_angle_hanger = 0;       //текущее значение угла отклонения вибро-подвеса (U2)
+signed short gl_ssh_angle_hanger_prev = 0;  //предыдущее значение угла отклонения вибро-подвеса (U1)
+
 
 signed short gl_ssh_current_1 = 0;      //разрядный ток 1
 signed short gl_ssh_current_2 = 0;      //разрядный ток 2
@@ -44,10 +48,9 @@ signed short gl_ssh_Utd2_cal = 0;       //напряжение лазерного термодатчика (кал
 signed short gl_ssh_Utd3_cal = 0;       //напряжение ? термодатчика (калибр.)
 
 signed short gl_ssh_SA_time = 0;        //период SA
-int gl_n_prT1VAL = 0x1000;   //период SA
+int gl_n_prT1VAL = 0x1000;              //засечка таймера для определения времени такта SA
 
-signed short gl_ssh_angle_hanger = 0;       //угол отклонения вибро-подвеса
-signed short gl_ssh_angle_hanger_prev = 0;  //предыдущее значение угла отклонения вибро-подвеса
+
 
 unsigned short gl_ush_MeanImpulses = 1;
 
@@ -1995,7 +1998,7 @@ void main() {
         }
 
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
-        if( gl_b_SyncMode) {
+        if( gl_b_SyncMode && ( gl_nSentPackIndex != UTD2)) {
 
           dbl_dN = fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
           dbl_dU = fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
