@@ -1,5 +1,5 @@
 #ifndef MAIN_H
-#define IN_COMMAND_BUF_LEN 3      //длина буфера входящих команд
+#define IN_COMMAND_BUF_LEN 4      //длина буфера входящих команд
 
 #define BIT_0 1
 #define BIT_1 2

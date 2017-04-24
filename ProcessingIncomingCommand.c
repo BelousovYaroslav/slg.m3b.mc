@@ -1,8 +1,11 @@
 #include <ADuC7026.h>
+#include <stdio.h>
 #include "Main.h"
 #include "settings.h"
 #include "McCommands.h"
 #include "AnalogueParamsConstList.h"
+#include "serial.h"
+#include "debug.h"
 
 //Буфер входящих команд
 extern char input_buffer[];                         //буфер входящих команд
@@ -39,10 +42,16 @@ extern unsigned short gl_ushFlashParamLastRULA;     //последнее RULA (obsolete)
 extern unsigned short gl_ushFlashParamLastRULM;     //последнее RULM (obsolete)
 
 //засечки таймеров
-extern int gl_nRppTimerT1;                          //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
-extern int gl_nSmoothMCoeffApplyT2;                 //засечка таймера для плавного применения коэффициента ошумления
+extern int gl_nRppTimerT2;                          //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
 
 extern char gl_c_EmergencyCode;                     //код ошибки
+
+extern int gl_snMeaningCounter;                     //Amplitude control module: counter of measured values
+extern int gl_snMeaningCounterRound;                //Amplitude control module: round of measured values
+extern int gl_snMeaningShift;                       //Amplitude control module: bits for shift to get mean
+extern long gl_lnMeaningSumm;                       //Amplitude control module: summ of amplitudes
+extern long gl_lnMeanImps;                          //Amplitude control module: mean (it's calculated shifted by 4 i.e. multiplied by 16)
+extern int  gl_nActiveRegulationT2;                 //Amplitude control module: amplitude active regulation T2 intersection
 
 //Флаги
 extern char gl_b_SyncMode;                          //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
@@ -62,10 +71,6 @@ extern unsigned int gl_un_RULAControl;              //код сигнала RULA выдаваемы
 
 extern short gl_nSentPackIndex;                     //Analogue Parameter Index (what are we sending now)
 
-//Плавное введение коэффициента ошумления
-extern int gl_nAppliedMCoeff;                       //Применённый коэффициент ошумления (мы его вводим плавно)
-extern int gl_nAmplStabStep;                        //плавное введение ошумления
-
 //функции
 extern void configure_hanger( void);                //функция выстаки кода такта подставки
 extern void DACConfiguration( void);                //функция выставки напряжений (сигналов RULA, RULM) на ЦАП 
@@ -75,25 +80,30 @@ extern double gl_dblMeanAbsDn;
 extern double gl_dblMeanAbsDu;
 extern int    gl_nMeanDecCoeffCounter;
 
-//Переменные участвующие в работе системы регулировки амплитуды
-extern double gl_dblAmplMean;
-extern int    gl_nAmplMeanCounter;
-
-
 void processIncomingCommand( void) {
   short in_param_temp;
+  int i;
 
   //**********************************************************************
   // Обработка буфера входящих команд
   //**********************************************************************
+#ifdef DEBUG
+  if( pos_in_in_buf > 0) {
+    //printf("DBG: PIC: in with %d\n", pos_in_in_buf);
+    putchar_nocheck( '0');
+    putchar_nocheck( '0' + pos_in_in_buf);
+  }
+#endif
+
   if( pos_in_in_buf == IN_COMMAND_BUF_LEN) {
 
 #ifdef DEBUG
-  printf("Incoming command: 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
-              input_buffer[ 0], input_buffer[ 1], input_buffer[ 2],
-              input_buffer[ 3], input_buffer[ 4], input_buffer[ 5]);
-
+    putchar_nocheck( '1');
+    printf("\nDBG: Incoming command: 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
+                input_buffer[ 0], input_buffer[ 1], input_buffer[ 2],
+                input_buffer[ 3], input_buffer[ 4], input_buffer[ 5]);
 #endif
+
     //LOCK прибора
     if( gl_chLockBit == 1) {
       switch( input_buffer[ 0]) {
@@ -120,6 +130,10 @@ void processIncomingCommand( void) {
       return;
     }
 
+#ifdef DEBUG
+    putchar_nocheck( '2');
+#endif
+
     switch( input_buffer[0]) {
       case MC_COMMAND_SET:
         switch( input_buffer[1]) {
@@ -127,14 +141,15 @@ void processIncomingCommand( void) {
             flashParamAmplitudeCode = input_buffer[2] + ( ( ( short) input_buffer[3]) << 8);
             gl_nSentPackIndex = AMPLITUDE;
 
-            //отключаем ошумление, засекаем таймер (будем его вводить плавно)
-            gl_nAppliedMCoeff = 4096;
-            gl_nSmoothMCoeffApplyT2 = T2VAL;
-            gl_nAmplStabStep = 0;
+            gl_snMeaningCounter = 0;
+            gl_snMeaningCounterRound = 128;
+            gl_snMeaningShift = 7;
+            gl_lnMeaningSumm = 0;
+            gl_lnMeanImps = 0;
 
-            //сбрасываем скользящую среднюю амплитуды
-            gl_dblAmplMean = 0;
-            gl_nAmplMeanCounter = 0;
+            //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_nActiveRegulationT2 = T2VAL;
+            if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
           break;
 
@@ -143,31 +158,22 @@ void processIncomingCommand( void) {
             configure_hanger();
             gl_nSentPackIndex = TACT_CODE;
 
-            //сбрасываем скользящую среднюю амплитуды
-            gl_dblAmplMean = 0;
-            gl_nAmplMeanCounter = 0;
+            //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_nActiveRegulationT2 = T2VAL;
+            if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
-            //отключаем ошумление, засекаем таймер (будем его вводить плавно)
-            gl_nAppliedMCoeff = 4096;
-            gl_nSmoothMCoeffApplyT2 = T2VAL;
-            gl_nAmplStabStep = 0;
           break;
 
           case M_COEFF: //Set NoiseCoefficient M
             flashParamMCoeff = input_buffer[2] + ( ( ( short) input_buffer[3]) << 8);
 
-            //отключаем ошумление, засекаем таймер (будем его вводить плавно)
-            gl_nAppliedMCoeff = 4096;
-            gl_nSmoothMCoeffApplyT2 = T2VAL;
-            gl_nAmplStabStep = 0;
-
-            //сбрасываем скользящую среднюю амплитуды
-            gl_dblAmplMean = 0;
-            gl_nAmplMeanCounter = 0;
-
             //выставляемся на ЦАП
             DACConfiguration();
             gl_nSentPackIndex = M_COEFF;
+
+            //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_nActiveRegulationT2 = T2VAL;
+            if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
           break;
 
           case STARTMODE: //Set StartMode
@@ -176,7 +182,7 @@ void processIncomingCommand( void) {
             GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
 
             gl_n_PerimeterReset = 1;
-            gl_nRppTimerT1 = T1VAL;
+            gl_nRppTimerT2 = T2VAL;
             gl_nSentPackIndex = STARTMODE;
 
             DACConfiguration();
@@ -317,7 +323,11 @@ void processIncomingCommand( void) {
 
           case ORG:         gl_nSentPackIndex = ORG_B1;       break;
 
-          case VERSION:     gl_nSentPackIndex = VERSION;      break;
+          case VERSION:
+            //printf("DBG: PIC: REQ: VER\n");
+            //putchar_nocheck( '3');
+            gl_nSentPackIndex = VERSION;
+          break;
         }
       break;
 
@@ -398,19 +408,19 @@ void processIncomingCommand( void) {
       case MC_COMMAND_ACT_INTEGR_OFF: //Integrator turn off
         GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1 (выключение)
         gl_n_PerimeterReset = 1;      //устанавливаем флаг недостоверности данных (1=прошло выключение, данные НЕдостоверны)
-        gl_nRppTimerT1 = 0;           //<-- ВРЕМЯ НЕ ЗАСЕКАЕМ! ФЛАГ НЕ ОПУСТИТСЯ НИКОГДА (только по команде включить интегратор)
+        gl_nRppTimerT2 = 0;           //<-- ВРЕМЯ НЕ ЗАСЕКАЕМ! ФЛАГ НЕ ОПУСТИТСЯ НИКОГДА (только по команде включить интегратор)
       break;
 
       case MC_COMMAND_ACT_INTEGR_ON:  //Integrator turn on
         GP0DAT &= ~( 1 << (16 + 5));  //RP_P   (p0.5) = 0 (включение)
         gl_n_PerimeterReset = 2;      //устанавливаем флаг недостоверности данных (2=прошло включение, данные НЕдостоверны)
-        gl_nRppTimerT1 = T1VAL;       //<-- ЗАСЕКАЕМ ВРЕМЯ! И ЧЕРЕЗ [определённое время] ФЛАГ БУДЕТ СНЯТ
+        gl_nRppTimerT2 = T1VAL;       //<-- ЗАСЕКАЕМ ВРЕМЯ! И ЧЕРЕЗ [определённое время] ФЛАГ БУДЕТ СНЯТ
       break;
 
       case MC_COMMAND_ACT_INTEGR_RESET:    //Integrator reset
         GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1 (выключение)
 
-        gl_nRppTimerT1 = T1VAL;       //<-- ЗАСЕКАЕМ ВРЕМЯ! И ЧЕРЕЗ [определённое время] ИНТЕГРАТОР ВКЛЮЧИТСЯ, ФЛАГ перейдёт в состояние 2, а ещё через [определённое время] флаг перейдёт в состояние 0 (данные достоверны)
+        gl_nRppTimerT2 = T1VAL;       //<-- ЗАСЕКАЕМ ВРЕМЯ! И ЧЕРЕЗ [определённое время] ИНТЕГРАТОР ВКЛЮЧИТСЯ, ФЛАГ перейдёт в состояние 2, а ещё через [определённое время] флаг перейдёт в состояние 0 (данные достоверны)
         gl_n_PerimeterReset = 1;      //устанавливаем флаг недостоверности данных (1=прошло выключение, данные НЕдостоверны)
       break;
 
@@ -454,5 +464,24 @@ void processIncomingCommand( void) {
         gl_bSimpleDnDuRegime ^= 1;
       break;
     }
+
+    if( pos_in_in_buf != 0) {
+
+#ifdef DEBUG
+      putchar_nocheck( '4');
+      //printf("DBG: PIC: out\n");
+#endif
+
+      for( i=0; i<6; input_buffer[ i++] = 0);
+      pos_in_in_buf = 0;
+    }
   }
+
+
+
+  //pos_in_in_buf = 0;
+
+//#ifdef DEBUG
+  //printf("DBG: PIC: out\n");
+//#endif
 }

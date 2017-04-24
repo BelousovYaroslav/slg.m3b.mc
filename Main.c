@@ -13,9 +13,7 @@
 #include "SimpleMaxRateRegime.h"
 #include "ProcessingIncomingCommand.h"
 #include "AnalogueParamsConstList.h"
-
-#define LONG_OUTPUT_PACK_LEN 24       //когда запрашивают мы выдаем 25 пачки (со всеми доп. параметрами по очереди)
-#define SHORT_OUTPUT_PACK_LEN 7       //в норме мы выдаем циклически по 7 пачек с аналог. параметрами
+#include "debug.h"
 
 //********************
 // Decrement coefficient calculation
@@ -56,14 +54,18 @@ unsigned short gl_ush_MeanImpulses = 1;
 
 #define RULA_MAX 4095
 #define RULA_MIN 25
+//unsigned int gl_un_RULAControl = 64;      //64   = 0.039 V
+//unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V
+//unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V
+unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V
+unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 4;
 
-//unsigned int gl_un_RULAControl = 64;      //64   = 0.039 V  
-//unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V  
-//unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V  
-unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V  
 
 char gl_c_EmergencyCode = 0;            //код ошибки
 
+//Буфер входящих команд
+char input_buffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
+char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
 
 char bAsyncDu = 0;                      //флаг передачи времени SA или приращ. угла в асинхр. режиме: 0-передается SA 1-передается dU
 
@@ -79,8 +81,7 @@ char gl_bManualLaserOff = 0;            //флаг что сами выключили ток лазера (ко
 char gl_bSimpleDnDuRegime = 0;          //флаг режима "частотной нарезки" (выдачи dN,dU с максимально возможной частотой, без снятий аналоговых параметров, без СРП, без контроля амплитуды)
 
 //Засечки таймеров
-int gl_nRppTimerT1 = 0;                 //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
-int gl_nSmoothMCoeffApplyT2;            //засечка таймера для плавного применения коэффициента ошумления
+int gl_nRppTimerT2 = 0;                 //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
 
 short gl_nSentPackIndex;                //индекс выдаваемой посылки
 char gl_c_OutPackCounter = 0;           //выдаваемый наружу счётчик посылок
@@ -94,22 +95,8 @@ int ADCChannel = 0; //читаемый канал АЦП
                     //5 = ADC5 = CntrPC
                     //6 = ADC6 = AmplAng
 
-
-#define BIT_0 1
-#define BIT_1 2
-#define BIT_2 4
-#define BIT_3 8
-#define BIT_4 16
-#define BIT_5 32
-#define BIT_6 64
-#define BIT_7 128
-
-//Буфер входящих команд
-char input_buffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
-char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
-
 //ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
-unsigned short flashParamAmplitudeCode = 9000;    //амплитуда колебаний виброподвеса
+unsigned short flashParamAmplitudeCode = 90;      //амплитуда колебаний виброподвеса
 unsigned short flashParamTactCode = 0;            //код такта ошумления
 unsigned short flashParamMCoeff = 4;              //коэффициент ошумления
 unsigned short flashParamStartMode = 5;           //начальная мода Системы Регулировки Периметра
@@ -145,16 +132,13 @@ char gl_bCalibrated;
 double TD1_K, TD1_B;
 double TD2_K, TD2_B;
 
-
-
-//Плавное введение коэффициента ошумления
-int gl_nAppliedMCoeff;          //Применённый коэффициент ошумления (мы его вводим плавно)
-int gl_nAmplStabStep = 0;       //плавное введение ошумления
-
 //Переменные участвующие в работе системы регулировки амплитуды
-double gl_dblAmplMean;
-int  gl_nAmplMeanCounter;
-unsigned int gl_un_PrevAmplRegulationT2;
+int gl_snMeaningCounter = 0;              //счётчик средних
+int gl_snMeaningCounterRound = 128;       //статистика среднего
+int gl_snMeaningShift = 7;                //степень - насколько сдвигать сумму (log2 от gl_snMeaningCounterRound)
+long gl_lnMeaningSumm = 0;                //сумма амплитуд
+long gl_lnMeanImps = 0;                   //средняя амплитуда (в импульсах интерф. картинки)
+int gl_nActiveRegulationT2 = 0;           //отсечка таймера для сброса флага активной регулировки амплитуды, он же флаг включенного состояния
 
 //Переменные участвующие в рассчёте коэффициента вычета "на лету"
 double gl_dblMeanAbsDn;
@@ -162,14 +146,25 @@ double gl_dblMeanAbsDu;
 int    gl_nMeanDecCoeffCounter;
 unsigned int gl_un_PrevT2DecCoeffCalc;
 
+#define BIT_0 1
+#define BIT_1 2
+#define BIT_2 4
+#define BIT_3 8
+#define BIT_4 16
+#define BIT_5 32
+#define BIT_6 64
+#define BIT_7 128
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //обработчик прерываний
-void FIQ_Handler (void)	__fiq
+void FIQ_Handler (void) __fiq
 {
-  if( ( FIQSTA & UART_BIT) != 0)	{
+  char tmp;
+  if( ( FIQSTA & UART_BIT) != 0) {
     if( pos_in_in_buf < IN_COMMAND_BUF_LEN)
       input_buffer[ pos_in_in_buf++] = COMRX;
+    else
+      tmp = COMRX;
     //GP0DAT = ( 1 << 16);
   }
 }
@@ -208,8 +203,6 @@ void send_pack( short shAnalogueParamValue) {
   char b1, b2, b3, b4;
 
 #ifndef DEBUG
-  //float angle_inc_corr;
-  signed short angle_inc_corr;
   float f_dN;
   double dbl_dN;
 
@@ -263,67 +256,92 @@ void send_pack( short shAnalogueParamValue) {
   putchar_nocheck( 0xAA);
 
   //***************************************************************************
-  //    dN
+  //    угол поворота
   //***************************************************************************
   if( gl_b_SyncMode) {
-    if( bAsyncDu) {
-      //АСИНХР: выдача dN-dU
-      signed int siAngleInc1 = ( signed short) angle_inc1;
-      //angle_inc_corr = (( float) (  siAngleInc1)) * 10.;
-      angle_inc_corr = angle_inc1;
-      f_dN = ( float) ( ( signed int) angle_inc1);
-      dbl_dN = ( double) ( ( signed int) angle_inc1);
+
+    ssh_dN = gl_ssh_angle_inc - gl_ssh_angle_inc_prev;
+    ssh_dU = gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev;
+
+    if( gl_chAngleOutput == 1) {
+      //АСИНХРОННЫЙ РЕЖИМ: выдача dN, dU в протоколе
+      pntr = ( char *) &ssh_dN;
+      b1 = pntr[0];
+      b2 = pntr[1];
+
+      pntr = ( char *) &ssh_dU;
+      b3 = pntr[0];
+      b4 = pntr[1];
     }
     else {
-      //АСИНХР: нормальный режим
-      /*double db_dN1 = ( double) gl_ssh_angle_inc_prev;
-      double db_dN2 = ( double) gl_ssh_angle_inc;
-      double dbU1 = ( double) gl_ssh_angle_hanger_prev;
-      double dbU2 = ( double) gl_ssh_angle_hanger;*/
+      //АСИНХРОННЫЙ РЕЖИМ РАБОТЫ: выдаём phi, но можно перейти в режим "высокочастотной нарезки"
 
-      ssh_dN = gl_ssh_angle_inc - gl_ssh_angle_inc_prev;
-      ssh_dU = gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev;
+      //2017.04.24 ВРЕМЕННО высокочастотный режим выключаем
+      //if( gl_bSimpleDnDuRegime == 1) {
+      //  //АСИНХР: "высокочастотчная выдача" dN-dU
+      //  signed int siAngleInc1 = ( signed short) angle_inc1;
+      //  f_dN = ( float) ( ( signed int) angle_inc1);
+      //  dbl_dN = ( double) ( ( signed int) angle_inc1);
 
-      n_dN = ( signed int) ssh_dN;
-      n_dU = ( signed int) ssh_dU;
+        //ЗДЕСЬ НАДО ДОРАБОТАТЬ ВЫДАЧУ СКОРОСТНУЮ
+      //}
+      //else {
+        //АСИНХР: нормальный режим
+        /*double db_dN1 = ( double) gl_ssh_angle_inc_prev;
+        double db_dN2 = ( double) gl_ssh_angle_inc;
+        double dbU1 = ( double) gl_ssh_angle_hanger_prev;
+        double dbU2 = ( double) gl_ssh_angle_hanger;*/
 
-      result =  ( double) n_dN - ( ( double) n_dU) * Coeff * (( signed short) flashParamSignCoeff - 1);
-      //printf("\n%.3f %.3f %.3f %.3f %.3f\n", db_dN1, db_dN2, dbU1, dbU2, result);
-      angle_inc_corr = ( signed short) ( result * 100.);
+        n_dN = ( signed int) ssh_dN;
+        n_dU = ( signed int) ssh_dU;
 
-      f_dN = ( float) ( ( signed short) result);
-      dbl_dN = ( double) ( ( signed short) result);
+        result =  ( double) n_dN - ( ( double) n_dU) * Coeff * (( signed short) flashParamSignCoeff - 1);
+        //printf("\n%.3f %.3f %.3f %.3f %.3f\n", db_dN1, db_dN2, dbU1, dbU2, result);
+
+        f_dN = ( float) ( ( signed short) result);
+        dbl_dN = ( double) ( ( signed short) result);
+
+        //размазываем f_dN на диапазон [-99 310; + 99 310]
+        dbl_dN = ( dbl_dN / 99310.) * 2147483647.;
+        n_dN = ( int) dbl_dN;
+
+        pntr = ( char *) &n_dN;
+        b1 = pntr[0];
+        b2 = pntr[1];
+        b3 = pntr[2];
+        b4 = pntr[3];
+      //}
     }
+
+    putchar_nocheck( b1);   cCheckSumm += b1;
+    putchar_nocheck( b2);   cCheckSumm += b2;
+    putchar_nocheck( b3);   cCheckSumm += b3;
+    putchar_nocheck( b4);   cCheckSumm += b4;
   }
   else {
     //СИНХРОННЫЙ РЕЖИМ
     double dAngleInc1 = ( double) angle_inc1;
-    //angle_inc_corr = (( float) (  siAngleInc1)) * 10.;
-    angle_inc_corr = ( signed short) ( angle_inc1 * 100.);
 
     f_dN = ( float) ( ( signed int) angle_inc1);
     dbl_dN = ( double) ( ( signed int) angle_inc1);
+
+    //размазываем f_dN на диапазон [-99 310; + 99 310]
+    dbl_dN = ( dbl_dN / 99310.) * 2147483647.;
+    n_dN = ( int) dbl_dN;
+
+    pntr = ( char *) &n_dN;
+    b1 = pntr[0];
+    b2 = pntr[1];
+    b3 = pntr[2];
+    b4 = pntr[3];
+
+    putchar_nocheck( b1);   cCheckSumm += b1;
+    putchar_nocheck( b2);   cCheckSumm += b2;
+    putchar_nocheck( b3);   cCheckSumm += b3;
+    putchar_nocheck( b4);   cCheckSumm += b4;
   }
 
-  /*  
-  putchar_nocheck( angle_inc_corr & 0xff);
-  putchar_nocheck( ( angle_inc_corr & 0xff00) >> 8);
-  */
 
-  //размазываем f_dN на диапазон [-99 310; + 99 310]
-  dbl_dN = ( dbl_dN / 99310.) * 2147483647.;
-  n_dN = ( int) dbl_dN;
-
-  pntr = ( char *) &n_dN;
-  b1 = pntr[0];
-  b2 = pntr[1];
-  b3 = pntr[2];
-  b4 = pntr[3];
-
-  putchar_nocheck( b1);   cCheckSumm += b1;
-  putchar_nocheck( b2);   cCheckSumm += b2;
-  putchar_nocheck( b3);   cCheckSumm += b3;
-  putchar_nocheck( b4);   cCheckSumm += b4;
 
 
   //***************************************************************************
@@ -335,42 +353,19 @@ void send_pack( short shAnalogueParamValue) {
   //***************************************************************************
   //ANALOG PARAMETER
   //***************************************************************************
-  putchar_nocheck(   shAnalogueParamValue & 0xff);
-  cCheckSumm += (    shAnalogueParamValue & 0xff);
+  putchar_nocheck(   shAnalogueParamValue & 0xFF);
+  cCheckSumm += (    shAnalogueParamValue & 0xFF);
 
-  putchar_nocheck( ( shAnalogueParamValue & 0xff00) >> 8);
-  cCheckSumm += ( (  shAnalogueParamValue & 0xff00) >> 8);
+  putchar_nocheck( ( shAnalogueParamValue & 0xFF00) >> 8);
+  cCheckSumm += ( (  shAnalogueParamValue & 0xFF00) >> 8);
 
   //***************************************************************************
-  //синхр. режим: SA TIME
-  //асинхр. режим: SA TIME или приращение угла поворота
-  if( gl_b_SyncMode) {
-    //асинхр. режим
-    if( bAsyncDu) {
-      //передаем dU
-      putchar_nocheck( ( gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev) & 0xff);
-      cCheckSumm += ( ( gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev) & 0xff);
+  //SA TIME
+  putchar_nocheck( gl_ssh_SA_time & 0xFF);
+  cCheckSumm += ( gl_ssh_SA_time & 0xFF);
 
-      putchar_nocheck( ( ( gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev) & 0xff00) >> 8);
-      cCheckSumm += ( ( ( gl_ssh_angle_hanger - gl_ssh_angle_hanger_prev) & 0xff00) >> 8);
-    }
-    else {
-      //передаем SA
-      putchar_nocheck( gl_ssh_SA_time & 0xff);
-      cCheckSumm += ( gl_ssh_SA_time & 0xff);
-
-      putchar_nocheck( ( gl_ssh_SA_time & 0xff00) >> 8);
-      cCheckSumm += ( ( gl_ssh_SA_time & 0xff00) >> 8);
-    }
-  }
-  else {
-    //синхронный режим
-    putchar_nocheck( gl_ssh_SA_time & 0xff);
-    cCheckSumm += ( gl_ssh_SA_time & 0xff);
-
-    putchar_nocheck( ( gl_ssh_SA_time & 0xff00) >> 8);
-    cCheckSumm += ( ( gl_ssh_SA_time & 0xff00) >> 8);
-  }
+  putchar_nocheck( ( gl_ssh_SA_time & 0xFF00) >> 8);
+  cCheckSumm += ( ( gl_ssh_SA_time & 0xFF00) >> 8);
 
   //***************************************************************************
   //PACK COUNTER
@@ -387,13 +382,13 @@ void send_pack( short shAnalogueParamValue) {
   bt = ( gl_n_PerimeterReset ? 0x80 : 0x00);
 
   //7 bit - 0x40 - lock bit
-  //bt += ( gl_chLockBit ? 0x40 : 0x00);
+  bt += ( gl_chLockBit ? 0x40 : 0x00);
 
   //6 bit - 0x20 - Sync (0)/Async(1) regime
   bt += ( gl_b_SyncMode ? 0x20 : 0x00);
 
   //5 bit - 0x10 - W (0) / dNdU (1) regime
-  //bt += ( gl_chAngleOutput ? 0x10 : 0x00);
+  bt += ( gl_chAngleOutput ? 0x10 : 0x00);
 
   //Error code (lower 4 byte)
   bt += gl_c_EmergencyCode;
@@ -454,22 +449,13 @@ void DACConfiguration( void) {
   // выставка ЦАПов
   //**********************************************************************
   // ЦАП 0
-  DAC0DAT = (( int) ( 4095.0 * ( ( double) gl_un_RULAControl / ( double) RULA_MAX ))) << 16; //выставка на выходе ЦАП0 1,0 В
-
+  DAC0DAT = (( int) ( 4095.0 * ( ( double) gl_un_RULAControl / ( double) RULA_MAX ))) << 16;
 
   // ЦАП 1 (мода)
-  /*gl_nAppliedMCoeff--;
-  if( gl_nAppliedMCoeff <= flashParamMCoeff / 250. * 4096.)
-    gl_nAppliedMCoeff = flashParamMCoeff / 250. * 4096.;
-  */
-  DAC1DAT = (( int) ( 4095.0 * ( ( double) gl_nAppliedMCoeff / 4096. * ( ( double) gl_un_RULAControl / ( double) RULA_MAX)))) << 16;  //(1.0) - это RULA в вольтах который на DAC0
-
-  //DAC1DAT = (( int) ( 4096.0 * ( ( double) flashParamParam3 / 250. * 0.25) / 3.0)) << 16;  //(1.0) - это RULA в вольтах который на DAC0
-
+  DAC1DAT = (( int) ( 4095.0 * ( ( double) flashParamMCoeff / 250. * ( ( double) gl_un_RULAControl / ( double) RULA_MAX * 2.5 )) / 3.0)) << 16;
 
   // ЦАП 2 (начальная мода)
   DAC2DAT = (( int) ( 4095.0 * ( ( double) flashParamStartMode / 250. ))) << 16;
-  //DAC2DAT = (( int) ( 4095.0 * 1.25 / 2.5)) << 16;
 }
 
 void FirstDecrementCoeffCalculation( void) {
@@ -939,7 +925,7 @@ void testPike() {
 }
 
 void main() {
-  unsigned short ush_SA_check_time;
+  //unsigned short ush_SA_check_time;
 
   //unsigned char jchar = 0x30; 
   int time = 20000;
@@ -965,13 +951,9 @@ void main() {
   double V_piezo;
   double temp_t;
 
-  double dblDelta;
-
+  //переменные используемые в перевычислении коэффициента вычета
   double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
-
   float Coeff;
-
-  double dbl_dN, dbl_dU;
 
   gl_cCalibProcessState = 0;    //0 - no calibration
 
@@ -1024,10 +1006,6 @@ void main() {
 #ifdef DEBUG
   printf("T7-SLG. Software version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MIDDLE, VERSION_MINOR);
   printf("DEBUG MODE\n");
-  i = LONG_OUTPUT_PACK_LEN;
-  printf("LONG_PACK: %d\n", i);
-  i = SHORT_OUTPUT_PACK_LEN;
-  printf("SHORT_PACK: %d\n", i);
 #endif
 
   //**********************************************************************
@@ -1138,14 +1116,32 @@ void main() {
   //**********************************************************************
   // Конфигурация Timer1
   //**********************************************************************
-  T1CON = 0x2C0;          //32kHz clocking
-  T1LD = 0x100000;
+  //T1CON = 0x2C0;          //32kHz clocking
+  //T1LD = 0x100000;
+  T1LD = 0x08FFFFFF;
+  T1CON = 0x0C4;
+  //0x0C4 = 0000 1100 0100
+  // XXX X   X X XX   0100      SourceClock/16
+  // XXX X   X X 00   XXXX      Binary
+  // XXX X   X 1 XX   XXXX      Periodic
+  // XXX X   1 X XX   XXXX      Enable
+  // XXX 0   X X XX   XXXX      Count down
+  // 000 X   X X XX   XXXX      CoreClock (41.78 Mhz, а если точнее 32768*1275=41779200, и не забудьте делитель!)
+
+
 
   //**********************************************************************
   // Конфигурация Timer2
   //**********************************************************************
-  T2CON = 0x2C0;          //32kHz clocking
-  T2LD = 0x100000;
+  T2LD = 0x00FFFFFF;
+  T2CON = 0x2C0;
+  //0x2C0 = 0010 1100 0000
+  // X XX X   X X XX   0000     SourceClock/1
+  // X XX X   X X 00   XXXX     Binary
+  // X XX X   X 1 XX   XXXX     Periodic
+  // X XX X   1 X XX   XXXX     Enable
+  // X XX 0   X X XX   XXXX     Count down
+  // X 01 X   X X XX   XXXX     External Crystal
 
 #ifdef DEBUG
   printf("done\n");
@@ -1239,7 +1235,7 @@ void main() {
     gl_ssh_ampl_angle = (ADCDAT >> 16);
 
   #ifdef DEBUG
-    printf("DEBUG: Hangerup vibration control: Measured: %.02f    CheckValue: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5 / 0.5, dStartAmplAngCheck );
+    printf("DEBUG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5 / 0.5, dStartAmplAngCheck );
   #endif
 
     if( ( ( double) gl_ssh_ampl_angle / 4095. * 2.5 / 0.5) > dStartAmplAngCheck) {
@@ -1252,6 +1248,9 @@ void main() {
       break;
     }
 
+    //printf( "%08X        %08X\n", T1VAL, T2VAL);
+    //printf( "%f\n", ( double) (( prt2val + T2LD - T2VAL) % T2LD) / 32768.);
+
     if( ( double) (( prt2val + T2LD - T2VAL) % T2LD) / 32768. > 5.0) {
       #ifdef DEBUG
         printf("DEBUG: Hangerup vibration control: FAILED\n");
@@ -1260,18 +1259,6 @@ void main() {
     }
   }
 #endif
-
-  if( gl_ushFlashParamLastRULA != 0)
-    gl_un_RULAControl = gl_ushFlashParamLastRULA;    //восстанавливаем последнее значение RULA
-  else
-    gl_un_RULAControl = 1400;
-
-  //if( gl_ushFlashParamLastRULM != 0)
-  //  gl_nAppliedMCoeff = gl_ushFlashParamLastRULM;    //восстанавливаем последнее значение RULM
-  //else
-    gl_nAppliedMCoeff = 4096;                    //Если последнего значения не было ставим 4096 и далее RULM каждый такт будет -- до нужного значения
-
-  DACConfiguration();
 
   //**********************************************************************
   // ПОДЖИГ ЛАЗЕРА
@@ -1317,9 +1304,10 @@ void main() {
         ( ( double) gl_ssh_current_2 / 4096. * 3. / 3.973 < ( double) flashParamI2min / 65535. * 0.75)) {*/
 
 #ifdef DEBUG
-  printf("DEBUG: Laser fireup: Measured I1=%.02f   Measured I2=%.02f\n",
-            ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5, 
-            ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5);
+  printf("DEBUG: Laser fireup: I1=%.02f   CONTROL=%.02f\n",
+            ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5, ( double) flashParamI1min / 65535. * 0.2);
+  printf("DEBUG: Laser fireup: I2=%.02f   CONTROL=%.02f\n",
+            ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5, ( double) flashParamI2min / 65535. * 0.2);
 #endif
 
     if( ( ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5  < ( double) flashParamI1min / 65535. * 0.2)  ||
@@ -1556,17 +1544,11 @@ void main() {
 
 #endif
 
-  //иницилизация переменных рассчёта скользящей средней амплитуды
-  gl_dblAmplMean = 0.;
-  gl_nAmplMeanCounter = 0;
-
   //инициализация переменных рассчёта скользящей средней коэффициента вычета
   gl_dblMeanAbsDn = 0.;
   gl_dblMeanAbsDu = 0.;
   gl_nMeanDecCoeffCounter = 0;
 
-  gl_nSmoothMCoeffApplyT2 = ( T2VAL - 32768) % T2LD;
-  gl_un_PrevAmplRegulationT2 = T2VAL;
   gl_un_PrevT2DecCoeffCalc = T2VAL;
 
 
@@ -1593,15 +1575,10 @@ void main() {
   //**********************************************************************
   //**********************************************************************
 
-  //gl_un_RULAControl = 2457;    //2457 = 1.500 V
-  if( gl_ushFlashParamLastRULA != 0)
-    gl_un_RULAControl = gl_ushFlashParamLastRULA;    //восстанавливаем последнее значение RULA
-  else
-    gl_un_RULAControl = 1400;                    //LIE!!   Если последнего значения не было, то ставим 2457 = 1.500 V
-
-  gl_nAppliedMCoeff = 4096;
-
-
+  //включаем флаг активной регулировки амплитуды (старт прибора)
+  gl_nActiveRegulationT2 = T2VAL;
+  if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
+  gl_un_RULAControl = 2457;    //2457 = 1.500 V
   DACConfiguration();
 
 
@@ -1633,6 +1610,10 @@ void main() {
       #endif
       */
       if( gl_b_SA_Processed == 0) { //если в этом SA цикле мы его еще не обрабатывали
+
+#ifdef DEBUG
+  //printf( ".0x%08X 0x%08X\n", T1VAL, T2VAL);
+#endif
 
         testPike();
 
@@ -1686,12 +1667,14 @@ void main() {
         //складываем два байта
         gl_ssh_angle_inc = lb + (hb << 8);
         #ifdef DEBUG
-          PrintBinShortNumber(hb);
-          printf(" ");
-          PrintBinShortNumber(lb);
-          printf(" ");
-          PrintBinShortNumber( gl_ssh_angle_inc);
-          printf(" ");
+          #if DEBUG == 2
+            PrintBinShortNumber(hb);
+            printf(" ");
+            PrintBinShortNumber(lb);
+            printf(" ");
+            PrintBinShortNumber( gl_ssh_angle_inc);
+            printf(" ");
+          #endif
         #endif
 
 
@@ -1898,20 +1881,6 @@ void main() {
 
           //складываем два байта (хотя он тут один)
           gl_ush_MeanImpulses = hb;
-
-
-          //вычисляем скользящую среднюю за последние 100 (ну или сколько к этому моменту прилетело) тактов
-          if( gl_nAmplMeanCounter == 0.) {
-            gl_dblAmplMean = ( double) gl_ush_MeanImpulses;
-          }
-          else {
-            gl_dblAmplMean = ( gl_dblAmplMean * gl_nAmplMeanCounter + ( double) gl_ush_MeanImpulses) / ( gl_nAmplMeanCounter + 1);
-          }
-
-          gl_nAmplMeanCounter++;
-          if( gl_nAmplMeanCounter > 100.)
-            gl_nAmplMeanCounter = 100.;
-
         }
 
         testPike();
@@ -1923,22 +1892,15 @@ void main() {
           //****************************************************************************************************************************************************************
           //REGULAR PACK
           //****************************************************************************************************************************************************************
-          //case UTD1:            send_pack( ( short) gl_snMeaningCounterRound);           gl_nSentPackIndex = UTD2;           break; //UTD1
           case UTD1:            send_pack( gl_ssh_Utd1);           gl_nSentPackIndex = UTD2;           break; //UTD1
-
-          //case UTD2:            send_pack( ( short) gl_lnMeanImps);           gl_nSentPackIndex = UTD3;           break; //UTD2
           case UTD2:            send_pack( gl_ssh_Utd2);           gl_nSentPackIndex = UTD3;           break; //UTD2
-
-          //case UTD3:            send_pack( gl_un_RULAControl);           gl_nSentPackIndex = I1;             break; //UTD3
           case UTD3:            send_pack( gl_ssh_Utd3);           gl_nSentPackIndex = I1;             break; //UTD3
-
-
           case I1:              send_pack( gl_ssh_current_1);      gl_nSentPackIndex = I2;             break; //I1
           case I2:              send_pack( gl_ssh_current_2);      gl_nSentPackIndex = CNTRPC;         break; //I2
           case CNTRPC:          send_pack( gl_ssh_Perim_Voltage);  gl_nSentPackIndex = AMPLANG_ALTERA; break; //CntrPc
-          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses);   gl_nSentPackIndex = UTD1;           break; //AmplAng от альтеры
-          //case AMPLANG_DUS:    send_pack( gl_ssh_ampl_angle);     gl_nSentPackIndex = UTD1;           break; //AmplAng с ДУСа
-          //case RULA:          send_pack( gl_un_RULAControl);     gl_nSentPackIndex = UTD3;           break; //RULA
+          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses << 1); gl_nSentPackIndex = RULA;           break; //AmplAng от альтеры
+          case AMPLANG_DUS:     send_pack( gl_ssh_ampl_angle);     gl_nSentPackIndex = RULA;           break; //AmplAng с ДУСа
+          case RULA:            send_pack( gl_un_RULAControl);     gl_nSentPackIndex = AMPL_HOLD_MEAN; break; //RULA
 
           //****************************************************************************************************************************************************************
           // PARAMETERS BY REQUEST
@@ -1995,75 +1957,41 @@ void main() {
           case T2_TD2:          send_pack( flashParamT2_TD2_val);  gl_nSentPackIndex = T2_TD3;        break; //max thermo-calib point thermo2 data
           case T2_TD3:          send_pack( flashParamT2_TD3_val);  gl_nSentPackIndex = UTD1;          break; //max thermo-calib point thermo3 data
 
+          case AMPL_HOLD_MEAN:  send_pack( gl_lnMeanImps);              gl_nSentPackIndex = AMPL_HOLD_ROUND;   break; //amplitude hold algoryhtm: mean
+          case AMPL_HOLD_ROUND: send_pack( gl_snMeaningCounterRound);   gl_nSentPackIndex = AMPL_HOLD_ACTIVE;  break; //amplitude hold algoryhtm: round
+          case AMPL_HOLD_ACTIVE:send_pack( gl_nActiveRegulationT2?1:0); gl_nSentPackIndex = UTD1;              break; //amplitude hold algoryhtm: falg of active regulation
+
         }
 
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
         if( gl_b_SyncMode && ( gl_nSentPackIndex != UTD2)) {
-
-          dbl_dN = fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
-          dbl_dU = fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
-
-          if( gl_nMeanDecCoeffCounter > 0) {
-
-            dbl_N1 = ( double) gl_ssh_angle_inc_prev;
-            dbl_N2 = ( double) gl_ssh_angle_inc;
-            dbl_U1  = ( double) gl_ssh_angle_hanger_prev;
-            dbl_U2  = ( double) gl_ssh_angle_hanger;
-            Coeff = (( float) flashParamDecCoeff) / 65535.;
-
-            gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
-
-            if( fabs( gl_dbl_Omega) < 5) {
-              gl_dblMeanAbsDn = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDn + dbl_dN) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
-              gl_dblMeanAbsDu = ( ( ( double) gl_nMeanDecCoeffCounter) * gl_dblMeanAbsDu + dbl_dU) / ( ( double) ( gl_nMeanDecCoeffCounter + 1));
-
-              if( ++gl_nMeanDecCoeffCounter > 10000) {
-                gl_nMeanDecCoeffCounter = 10000;
-
-                if( (( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL)) % T2LD >= 32768) {
-                  gl_un_PrevT2DecCoeffCalc = T2VAL;
-
-                  flashParamDecCoeff = ( short) ( ( int) ( gl_dblMeanAbsDn / gl_dblMeanAbsDu * 65535.));
-                  gl_nSentPackIndex = DECCOEFF;
-                }
-              }
-            }
-          }
-          else {
-            gl_dblMeanAbsDn = dbl_dN;
-            gl_dblMeanAbsDu = dbl_dU;
-            gl_un_PrevT2DecCoeffCalc = T2VAL;
-            gl_nMeanDecCoeffCounter++;
-          }
-
-          /*
-          db_dN1 = ( double) gl_ssh_angle_inc_prev;
-          db_dN2 = ( double) gl_ssh_angle_inc;
-          dbU1 = ( double) gl_ssh_angle_hanger_prev;
-          dbU2 = ( double) gl_ssh_angle_hanger;
+          dbl_N1 = ( double) gl_ssh_angle_inc_prev;
+          dbl_N2 = ( double) gl_ssh_angle_inc;
+          dbl_U1 = ( double) gl_ssh_angle_hanger_prev;
+          dbl_U2 = ( double) gl_ssh_angle_hanger;
 
           Coeff = (( float) flashParamDecCoeff) / 65535.;
-          gl_dbl_Omega =  ( db_dN2 - db_dN1) - ( dbU2 - dbU1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
+          gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) flashParamSignCoeff - 1);
           if( fabs( gl_dbl_Omega) < 5) {
             gl_dbl_Nsumm += fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
             gl_dbl_Usumm += fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
             gl_un_DecCoeffStatPoints++;
-            if( !( gl_un_DecCoeffStatPoints % DEC_COEFF_CONTINUOUS_CALCULATION_N)) {
+            if( ( gl_un_DecCoeffStatPoints % DEC_COEFF_CONTINUOUS_CALCULATION_N) == 0 &&
+                ( ( ( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL) % T2LD) >= 32768 ) ) {
               //flashParamDecCoeff = ( short) ( ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
               flashParamDecCoeff = ( short) ( ( int) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
-
-
               gl_dbl_Nsumm = gl_dbl_Usumm = 0.;
               gl_un_DecCoeffStatPoints = 0;
-              nSentPacksRound = LONG_OUTPUT_PACK_LEN;
+              gl_nSentPackIndex = DECCOEFF;
             }
           }
-          */
         }
 
 
         #ifdef DEBUG
-          printf( "%d     %d     %d      %.2fV\n", gl_ssh_angle_inc, gl_ssh_angle_inc - gl_ssh_angle_inc_prev, gl_ssh_angle_hanger- gl_ssh_angle_hanger_prev, ( double) gl_ssh_angle_hanger * 0.61 / 1000.);
+          #if DEBUG == 2
+            printf( "%d     %d     %d      %.2fV\n", gl_ssh_angle_inc, gl_ssh_angle_inc - gl_ssh_angle_inc_prev, gl_ssh_angle_hanger- gl_ssh_angle_hanger_prev, ( double) gl_ssh_angle_hanger * 0.61 / 1000.);
+          #endif
         #endif
 
         testPike();
@@ -2081,7 +2009,7 @@ void main() {
             //flashParamStartMode = 125;
             //DACConfiguration();
             GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
-            gl_nRppTimerT1 = T1VAL;
+            gl_nRppTimerT2 = T2VAL;
             gl_n_PerimeterReset = 1;
           }
         }
@@ -2091,69 +2019,129 @@ void main() {
         //**********************************************************************
         //Стабилизация амплитуды колебаний виброподвеса
         //**********************************************************************
-        if( gl_nAmplStabStep < 10) {
-          if( T2VAL <= gl_nSmoothMCoeffApplyT2) {
-            gl_nAmplStabStep++;
-            gl_nSmoothMCoeffApplyT2 = ( T2VAL +T2LD - 6553) % T2LD;
+        gl_snMeaningCounter = ( ++gl_snMeaningCounter) % gl_snMeaningCounterRound;
 
-            gl_nAppliedMCoeff = 4096. * ( 1. - ( 1. - ( double) flashParamMCoeff / 250.) / 10. * ( double) gl_nAmplStabStep);
+        //собственно сама подстройка напряжения RULA
+        if( gl_snMeaningCounter == 0) {
 
-            /*switch( gl_nAmplStabStep) {
-              case  0:  gl_nAmplStabApplyRulaTacts = 1;  gl_nDelta = 4; break;
-              case  1:  gl_nAmplStabApplyRulaTacts = 2;  gl_nDelta = 4; break;
-              case  2:  gl_nAmplStabApplyRulaTacts = 3;  gl_nDelta = 2; break;
-              case  3:  gl_nAmplStabApplyRulaTacts = 4;  gl_nDelta = 2; break;
-              case  4:  gl_nAmplStabApplyRulaTacts = 5;  gl_nDelta = 2; break;
-              case  5:  gl_nAmplStabApplyRulaTacts = 6;  gl_nDelta = 2; break;
-              case  6:  gl_nAmplStabApplyRulaTacts = 7;  gl_nDelta = 1; break;
-              case  7:  gl_nAmplStabApplyRulaTacts = 8;  gl_nDelta = 1; break;
-              case  8 : gl_nAmplStabApplyRulaTacts = 9;  gl_nDelta = 1; break;
-              case  9:  gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1; break;
-              case 10:  gl_nAmplStabApplyRulaTacts = 10; gl_nDelta = 1; break;
+          //от альтеры... сразу получаем амплитуду в виде числа импульсов
+          gl_lnMeanImps = gl_lnMeaningSumm >> ( gl_snMeaningShift - 4);
+          //gl_lnMeanImps = gl_lnMeanImps >> 1;
+
+          if( gl_lnMeanImps > 90) {  //90 = 16 * 5
+            //от ДУСа.... переводим в вольты из рассчёта 4095=2,5В, (2016.02.05 14:15, сомнения: 2.5 или 3?)
+            //потом рассчёт 2,2В=120"
+            //и делением на масштабный коэффициент 2,9 мы получаем число импульсов
+            //gl_dMeanImps = gl_dMeaningSumm / ( double) gl_snMeaningCounterRound / 4095. * 2.5 / 2.2 * 120. / 2.9;
+
+            if( abs( gl_lnMeanImps - ( flashParamAmplitudeCode << 4)) > 1) {    //то есть амплитуду не трогаем если средняя не дальше 1/16 от заданной
+              if( gl_lnMeanImps > ( flashParamAmplitudeCode << 4)) {
+
+                //gl_un_RULAControl -= nDelta;
+
+                if( nDelta >= gl_un_RULAControl) {
+                  //delta = cRULAControl;
+                  gl_un_RULAControl = gl_un_RULAControl / 2;
+                }
+                else
+                  gl_un_RULAControl -= nDelta;
+
+              }
+              if( gl_lnMeanImps < ( flashParamAmplitudeCode << 4)) {
+
+                //gl_un_RULAControl += nDelta;
+
+                if( gl_un_RULAControl + nDelta > RULA_MAX) {
+                  //delta = 255 - cRULAControl;
+                  gl_un_RULAControl = ( RULA_MAX + gl_un_RULAControl) / 2;
+                }
+                else
+                  gl_un_RULAControl += nDelta;
+
+              }
+            }
+
+            if( gl_un_RULAControl > RULA_MAX) gl_un_RULAControl = RULA_MAX;
+            if( gl_un_RULAControl < RULA_MIN) gl_un_RULAControl = RULA_MIN;
+
+            //сокращение амплитуды "встряски" (если она еще > 1)
+            nDelta = nDelta >> 1;
+            if( nDelta < 1) {
+              nDelta = 1;
+            }
+
+            /*
+            //повторная "встрясковая" подстройка после 7 секунд
+            if( gl_nT2StartDataOut) {
+              if( ( T2LD + gl_nT2StartDataOut - T2VAL) % T2LD >= 32768 * 7) {
+                /*
+                nDelta = ( RULA_MAX - RULA_MIN) / 4;
+                gl_snMeaningCounterRound = MEANING_IMP_PERIOD_100;
+                */
+                /*
+                gl_nT2StartDataOut = 0;
+              }
             }
             */
-            //gl_nDelta = 1;
-          }
-        }
 
-        if( (( gl_un_PrevAmplRegulationT2 + T2LD - T2VAL)) % T2LD >= 3276) {
-        //if( ( gl_nAmplMeanCounter % ) == 0) {
 
-          gl_un_PrevAmplRegulationT2 = T2VAL;
-
-          dblDelta = ( ( double) flashParamAmplitudeCode / 100.) - gl_dblAmplMean;
-
-          //если расхождение скользящей средней и заданной амплитуд большое - подкрутим RULA
-          /*
-          if(      fabs( dblDelta) > 50)  { if( dblDelta > 0) gl_un_RULAControl += 50;  else  gl_un_RULAControl -= 50; }
-          else if( fabs( dblDelta) > 10)  { if( dblDelta > 0) gl_un_RULAControl += 10;   else  gl_un_RULAControl -= 10;  }
-          else if( fabs( dblDelta) > 5)   { if( dblDelta > 0) gl_un_RULAControl += 5;    else  gl_un_RULAControl -= 5;   }
-          else if( fabs( dblDelta) > 1) { if( dblDelta > 0)   gl_un_RULAControl += 1;    else  gl_un_RULAControl -= 1;   }
-          */
-          if( dblDelta > 0.5) {
-            gl_un_RULAControl +=  ( int) ( dblDelta * 5.);
-          }
-          else if( dblDelta < 0.5) {
-            if( ( int) fabs( dblDelta * 5.) > gl_un_RULAControl) {
-              gl_un_RULAControl = RULA_MIN;
+            //рабочий режим (после подстройки амплитудой) тут мы подстраиваемся временем
+            //2014.10.09 - добавил что если большая разница - подстроим и приращением
+            
+            if( gl_nActiveRegulationT2 != 0) {
+              if( nDelta < 10) {
+                //активная регулировка амплитуды
+                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ nDelta = 200; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { nDelta = 100; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { nDelta = 50;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { nDelta = 25;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { nDelta = 12;  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {               gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {               gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {               gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else                                                                 {               gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+              }
             }
             else {
-              gl_un_RULAControl +=  ( int) ( dblDelta * 5.);
+              //регулировка амплитуды в процессе работы прибора
+              if( nDelta == 1) {
+
+                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ nDelta = 64; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { nDelta = 32; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { nDelta = 16; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { nDelta = 8;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { nDelta = 4;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else                                                                 {              gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+              }
             }
+          }
+
+          gl_lnMeaningSumm = 0;
+
+        }
+        else {
+          gl_lnMeaningSumm += gl_ush_MeanImpulses;    //от альтеры
+          //gl_dMeaningSumm += gl_ssh_ampl_angle;    //от ДУСа
+        }
+
+        //**********************************************************************
+        //обработка сброса флага активной регулировки амплитуды
+        //**********************************************************************
+        if( gl_nActiveRegulationT2 != 0) {
+          if( (( T2LD + gl_nActiveRegulationT2 - T2VAL) % T2LD) > 32768. * 10.0) {    //длительность фазы активной регулировки амплитуды 10 сек
+            gl_nActiveRegulationT2 = 0;
           }
         }
 
-        if( gl_un_RULAControl > RULA_MAX) gl_un_RULAControl = RULA_MAX;
-        if( gl_un_RULAControl < RULA_MIN) gl_un_RULAControl = RULA_MIN;
-
-        //применяем RULA-RULM (там же RULM применяется плавно-медленно)
         DACConfiguration();
-
 
         //**********************************************************************
         //обработка флага сброса RP_P
         //**********************************************************************
-        if( gl_nRppTimerT1 != 0) {
+        if( gl_nRppTimerT2 != 0) {
 
           if( gl_n_PerimeterReset == 1) {
 
@@ -2161,11 +2149,11 @@ void main() {
             //3276  = 0.1 sec    = 100 msec
             //327   = 0.01 sec   = 10 msec
             //32    = 0.001 sec  = 1 msec
-            if( (( T1LD + gl_nRppTimerT1 - T1VAL) % T1LD) > 32) {
+            if( (( T2LD + gl_nRppTimerT2 - T2VAL) % T2LD) > 32) {
 
               //сброс (включение) интеграторов в системе регулировки периметра
               GP0DAT &= ~( 1 << (16 + 5));  //RP_P   (p0.5) = 0
-              gl_nRppTimerT1 = T1VAL;
+              gl_nRppTimerT2 = T2VAL;
               gl_n_PerimeterReset = 2;
             }
           }
@@ -2174,9 +2162,9 @@ void main() {
             //32768 = 1 sec
             //3276  = 0.1 sec = 100 msec
             //327   = 0.01 sec = 10 msec
-            if( (( T1LD + gl_nRppTimerT1 - T1VAL) % T1LD) > 3276) {
+            if( (( T2LD + gl_nRppTimerT2 - T2VAL) % T2LD) > 3276) {
               gl_n_PerimeterReset = 0;
-              gl_nRppTimerT1 = 0;
+              gl_nRppTimerT2 = 0;
             }
           }
 
@@ -2197,6 +2185,7 @@ void main() {
       //если линия сигнала SA в низком уровне - то как только она поднимется начнется новый необработанный такт
       gl_b_SA_Processed = 0;
 
+      /*
       //проверка тактирования
       ush_SA_check_time = ( T1LD + gl_n_prT1VAL - T1VAL) % T1LD;
 
@@ -2213,6 +2202,7 @@ void main() {
 
         deadloop_no_tact( ERROR_TACT_SIGNAL_LOST);
       }
+      */
     }
   }
 }
