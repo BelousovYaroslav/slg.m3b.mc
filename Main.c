@@ -15,17 +15,6 @@
 #include "AnalogueParamsConstList.h"
 #include "debug.h"
 
-//********************
-// Decrement coefficient calculation
-#define DEC_COEFF_FIRST_CALCULATION_N 100
-#define DEC_COEFF_CONTINUOUS_CALCULATION_N 1000
-unsigned int gl_un_DecCoeffStatPoints = 0;
-double gl_dbl_Nsumm = 0.;
-double gl_dbl_Usumm = 0.;
-double gl_dbl_Omega;
-
-//********************
-
 signed short gl_ssh_angle_inc = 0;          //текущее значение с реверсивного счётчика (N2)
 signed short gl_ssh_angle_inc_prev = 0;     //предыдущее значение с реверсивного счётчика (N1)
 
@@ -67,7 +56,7 @@ char gl_c_EmergencyCode = 0;            //код ошибки
 char input_buffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
 char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
 
-char bAsyncDu = 0;                      //флаг передачи времени SA или приращ. угла в асинхр. режиме: 0-передается SA 1-передается dU
+int gl_n3kVapplies = 0;                 //число 3kV импульсов при поджиге
 
 
 //ФЛАГИ
@@ -95,6 +84,17 @@ int ADCChannel = 0; //читаемый канал АЦП
                     //5 = ADC5 = CntrPC
                     //6 = ADC6 = AmplAng
 
+//********************
+#define ADC_CHANNEL_UTD1    0
+#define ADC_CHANNEL_UTD2    1
+#define ADC_CHANNEL_UTD3    2
+#define ADC_CHANNEL_I1      3
+//#define ADC_CHANNEL_I1      8
+#define ADC_CHANNEL_I2      4
+#define ADC_CHANNEL_CNTRPC  5
+#define ADC_CHANNEL_AA      6
+
+
 //ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
 unsigned short flashParamAmplitudeCode = 90;      //амплитуда колебаний виброподвеса
 unsigned short flashParamTactCode = 0;            //код такта ошумления
@@ -118,8 +118,6 @@ unsigned short gl_ushFlashParamLastRULA = 0;      //последнее RULA (obsolete)
 unsigned short gl_ushFlashParamLastRULM = 0;      //последнее RULM (obsolete)
 
 double dStartAmplAngCheck = 0.5;
-
-unsigned short nFiringTry = 0;
 
 //калибровка термодатчиков
 signed short flashParam_calibT1;
@@ -145,6 +143,16 @@ double gl_dblMeanAbsDn;
 double gl_dblMeanAbsDu;
 int    gl_nMeanDecCoeffCounter;
 unsigned int gl_un_PrevT2DecCoeffCalc;
+
+//********************
+// Decrement coefficient calculation
+#define DEC_COEFF_FIRST_CALCULATION_N 100
+#define DEC_COEFF_CONTINUOUS_CALCULATION_N 1000
+unsigned int gl_un_DecCoeffStatPoints = 0;
+double gl_dbl_Nsumm = 0.;
+double gl_dbl_Usumm = 0.;
+double gl_dbl_Omega;
+
 
 #define BIT_0 1
 #define BIT_1 2
@@ -179,10 +187,10 @@ void pause_T0 ( int n) {
 
 void pause( int n) {
   unsigned int prval, chk;
-  prval = T1VAL;
-  chk = (( T1LD + prval - T1VAL) % T1LD);
+  prval = T2VAL;
+  chk = (( T2LD + prval - T2VAL) % T2LD);
   while( chk < n)
-    chk = (( T1LD + prval - T1VAL) % T1LD);
+    chk = (( T2LD + prval - T2VAL) % T2LD);
 }
 
 double round( double val) {
@@ -1225,8 +1233,8 @@ void main() {
   #endif
 #else
 
-  dStartAmplAngCheck = ( double) flashParamAmplAngMin1 / 65535. * 6.;
-  dStartAmplAngCheck = 0.25;
+  dStartAmplAngCheck = ( double) flashParamAmplAngMin1 / 65535. * 3.;
+  //dStartAmplAngCheck = 0.25;
   prt2val = T2VAL;
   ADCCP = 0x06;   //AmplAng channel
   while( 1) {
@@ -1235,10 +1243,10 @@ void main() {
     gl_ssh_ampl_angle = (ADCDAT >> 16);
 
   #ifdef DEBUG
-    printf("DEBUG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5 / 0.5, dStartAmplAngCheck );
+    printf("DEBUG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
   #endif
 
-    if( ( ( double) gl_ssh_ampl_angle / 4095. * 2.5 / 0.5) > dStartAmplAngCheck) {
+    if( ( ( double) gl_ssh_ampl_angle / 4095. * 2.5) > dStartAmplAngCheck) {
       //SUCCESS
 
       #ifdef DEBUG
@@ -1287,14 +1295,14 @@ void main() {
     pause( 16384);
 
     //измеряем ток I1
-    ADCCP = 0x03;
+    ADCCP = ADC_CHANNEL_I1;
     pause( 10);
     ADCCON |= 0x80;
     while (!( ADCSTA & 0x01)){}     // ожидаем конца преобразования АЦП
     gl_ssh_current_1 = (ADCDAT >> 16);
 
     //измеряем ток I2
-    ADCCP = 0x04;
+    ADCCP = ADC_CHANNEL_I2;
     pause( 10);
     ADCCON |= 0x80;
     while (!( ADCSTA & 0x01)){}     // ожидаем конца преобразования АЦП
@@ -1304,21 +1312,25 @@ void main() {
         ( ( double) gl_ssh_current_2 / 4096. * 3. / 3.973 < ( double) flashParamI2min / 65535. * 0.75)) {*/
 
 #ifdef DEBUG
-  printf("DEBUG: Laser fireup: I1=%.02f   CONTROL=%.02f\n",
-            ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5, ( double) flashParamI1min / 65535. * 0.2);
-  printf("DEBUG: Laser fireup: I2=%.02f   CONTROL=%.02f\n",
-            ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5, ( double) flashParamI2min / 65535. * 0.2);
+  printf("DEBUG: Laser fireup: code=0x%04x   I1=%.02f   CONTROL=%.02f\n",
+            gl_ssh_current_1,
+            ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5,
+            ( double) flashParamI1min / 65535. * 0.75);
+  printf("DEBUG: Laser fireup: code=0x%04x   I2=%.02f   CONTROL=%.02f\n",
+            gl_ssh_current_2,
+            ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5,
+            ( double) flashParamI2min / 65535. * 0.75);
 #endif
 
-    if( ( ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5  < ( double) flashParamI1min / 65535. * 0.2)  ||
-        ( ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5 < ( double) flashParamI2min / 65535. * 0.2)) {
+    if( ( ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5  < ( double) flashParamI1min / 65535. * 0.75)  ||
+        ( ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5 < ( double) flashParamI2min / 65535. * 0.75)) {
         //не зажглось
 
         //снимаем 3kV линию (остаётся 800V)
         GP4DAT |= ( 1 << (16 + 1));   //OFF3KV (p4.1) = 1
 
         //инкрементируем и проверяем число попыток поджига
-        if( ++nFiringTry >= 25) {
+        if( ++gl_n3kVapplies >= 25) {
 
           //5 пачек по 5 попыток поджига не сработали - отваливаемся в мертвый цикл
 
@@ -1335,7 +1347,7 @@ void main() {
           deadloop_no_firing( ERROR_NO_LASER_FIRING);
         }
 
-        if( ( nFiringTry % 5)) {
+        if( ( gl_n3kVapplies % 5)) {
           //раз в пять попыток отключаем 800V линию
 
           //выключаем высокое 800V
@@ -1841,13 +1853,29 @@ void main() {
             ThermoCalibrationCalculation();
         }
 
-        /*if( ADCChannel == 2) ADCChannel=8;
-        else if( ADCChannel == 8) ADCChannel=4;
-        else*/
-          ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
+        //переключение канала АЦП
+        switch( ADCChannel) {
+          case ADC_CHANNEL_UTD1:    ADCChannel = ADC_CHANNEL_UTD2;    break;
+          case ADC_CHANNEL_UTD2:    ADCChannel = ADC_CHANNEL_UTD3;    break;
+          case ADC_CHANNEL_UTD3:    ADCChannel = ADC_CHANNEL_I1;      break;
 
+          case ADC_CHANNEL_I1:      ADCChannel = ADC_CHANNEL_I2;      break;
+          case ADC_CHANNEL_I2:      ADCChannel = ADC_CHANNEL_CNTRPC;  break;
+
+          case ADC_CHANNEL_CNTRPC:  ADCChannel = ADC_CHANNEL_AA;      break;
+          case ADC_CHANNEL_AA:      ADCChannel = ADC_CHANNEL_UTD1;    break;
+
+          default:                  ADCChannel = ADC_CHANNEL_UTD1;    break;
+        }
+        /*
+        if( ADCChannel == 2) ADCChannel = ADC_CHANNEL_I1;
+        else if( ADCChannel == ADC_CHANNEL_I1) ADCChannel=4;
+        else
+          ADCChannel = (++ADCChannel) % 7;        //увеличиваем счетчик-указатель измеряемых аналог. параметров
+        */
 
         ADCCP = ADCChannel;              //выставляем новый канал АЦП
+        for( i=0; i<100; i++);
         //pause( 10);
         ADCCON |= 0x80;                  //запуск нового преобразования (съем будет в следующем такте SA)
 
@@ -1892,15 +1920,15 @@ void main() {
           //****************************************************************************************************************************************************************
           //REGULAR PACK
           //****************************************************************************************************************************************************************
-          case UTD1:            send_pack( gl_ssh_Utd1);           gl_nSentPackIndex = UTD2;           break; //UTD1
-          case UTD2:            send_pack( gl_ssh_Utd2);           gl_nSentPackIndex = UTD3;           break; //UTD2
-          case UTD3:            send_pack( gl_ssh_Utd3);           gl_nSentPackIndex = I1;             break; //UTD3
-          case I1:              send_pack( gl_ssh_current_1);      gl_nSentPackIndex = I2;             break; //I1
-          case I2:              send_pack( gl_ssh_current_2);      gl_nSentPackIndex = CNTRPC;         break; //I2
-          case CNTRPC:          send_pack( gl_ssh_Perim_Voltage);  gl_nSentPackIndex = AMPLANG_ALTERA; break; //CntrPc
-          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses << 1); gl_nSentPackIndex = RULA;           break; //AmplAng от альтеры
-          case AMPLANG_DUS:     send_pack( gl_ssh_ampl_angle);     gl_nSentPackIndex = RULA;           break; //AmplAng с ДУСа
-          case RULA:            send_pack( gl_un_RULAControl);     gl_nSentPackIndex = AMPL_HOLD_MEAN; break; //RULA
+          case UTD1:            send_pack( gl_ssh_Utd1);           gl_nSentPackIndex = UTD2;            break; //UTD1
+          case UTD2:            send_pack( gl_ssh_Utd2);           gl_nSentPackIndex = UTD3;            break; //UTD2
+          case UTD3:            send_pack( gl_ssh_Utd3);           gl_nSentPackIndex = I1;              break; //UTD3
+          case I1:              send_pack( gl_ssh_current_1);      gl_nSentPackIndex = I2;              break; //I1
+          case I2:              send_pack( gl_ssh_current_2);      gl_nSentPackIndex = CNTRPC;          break; //I2
+          case CNTRPC:          send_pack( gl_ssh_Perim_Voltage);  gl_nSentPackIndex = AMPLANG_DUS;     break; //CntrPc
+          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses << 1); gl_nSentPackIndex = RULA;         break; //AmplAng от альтеры
+          case AMPLANG_DUS:     send_pack( gl_ssh_ampl_angle);     gl_nSentPackIndex = RULA;            break; //AmplAng с ДУСа
+          case RULA:            send_pack( gl_un_RULAControl);     gl_nSentPackIndex = AMPL_HOLD_MEAN;  break; //RULA
 
           //****************************************************************************************************************************************************************
           // PARAMETERS BY REQUEST
@@ -1917,7 +1945,9 @@ void main() {
 
           /*
           case HV_APPLY_COUNT_SET: send_pack( flashParamHvApplyCount); gl_nSentPackIndex = UTD1;        break; //HV apply cycles in pack
-          case HV_APPLY_COUNT_TR:  send_pack( nFiringTry);             gl_nSentPackIndex = UTD1;        break; //HV apply cycles applied in this run
+          */
+          case HV_APPLY_COUNT_TR:  send_pack( gl_n3kVapplies);         gl_nSentPackIndex = UTD1;        break; //HV apply cycles applied in this run
+          /*
           case HV_APPLY_DURAT_SET: send_pack( flashParamHvApplyDurat); gl_nSentPackIndex = UTD1;        break; //HV apply cycle duration
           case HV_APPLY_PACKS:     send_pack( flashParamHvApplyPacks); gl_nSentPackIndex = UTD1;        break; //HV apply packs
           */
