@@ -84,6 +84,11 @@ int ADCChannel = 0; //читаемый канал АЦП
                     //5 = ADC5 = CntrPC
                     //6 = ADC6 = AmplAng
 
+//переменные учатсвующие в счётчике секунд относительно старта прибора
+long gl_lSecondsFromStart;
+long gl_l5SecPrevValue;
+int gl_nSecondsT2Lock;
+
 //********************
 #define ADC_CHANNEL_UTD1    0
 #define ADC_CHANNEL_UTD2    1
@@ -1176,8 +1181,10 @@ void main() {
   printf("DEBUG: DAC Configuration...");
 #endif
 
-
-
+  //Сброс счётчика секунд от начала работы прибора
+  gl_lSecondsFromStart = 0;
+  gl_l5SecPrevValue = 0;
+  gl_nSecondsT2Lock = T2VAL;
 
   //**********************************************************************
   // Конфигурация и выставка ЦАП
@@ -1595,6 +1602,14 @@ void main() {
 
 
   while(1) {
+
+    if( ( ( gl_nSecondsT2Lock + T2LD - T2VAL) % T2LD) > 32768) {
+      gl_nSecondsT2Lock = ( gl_nSecondsT2Lock - 32768 + T2LD) % T2LD;
+      gl_lSecondsFromStart++;
+    }
+
+
+
     if( gl_bSimpleDnDuRegime == 1) {
       SimpleMaxRateDnDuRegime();
     }
@@ -1604,8 +1619,6 @@ void main() {
     if( gl_bSimpleDnDuRegime == 1) {
       continue;
     }
-
-
 
     /*
     //наёбочная часть - эмуляция такта 10(5?) раз в секунду
@@ -1913,6 +1926,13 @@ void main() {
 
         testPike();
 
+        if( gl_lSecondsFromStart - gl_l5SecPrevValue > 5) {
+          if( gl_nSentPackIndex == UTD1) {
+            gl_nSentPackIndex = SECONDS_FROM_START;
+            gl_l5SecPrevValue = gl_lSecondsFromStart;
+          }
+        }
+
         //**********************************************************************
         // Выдача данных согласно протоколу
         //**********************************************************************
@@ -1991,6 +2011,7 @@ void main() {
           case AMPL_HOLD_ROUND: send_pack( gl_snMeaningCounterRound);   gl_nSentPackIndex = AMPL_HOLD_ACTIVE;  break; //amplitude hold algoryhtm: round
           case AMPL_HOLD_ACTIVE:send_pack( gl_nActiveRegulationT2?1:0); gl_nSentPackIndex = UTD1;              break; //amplitude hold algoryhtm: falg of active regulation
 
+          case SECONDS_FROM_START: send_pack( gl_lSecondsFromStart);    gl_nSentPackIndex = UTD1;              break; //From start seconds timer
         }
 
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
