@@ -27,12 +27,15 @@ signed short gl_ssh_current_2 = 0;      //разрядный ток 2
 signed short gl_ssh_Perim_Voltage = 5;  //напряжение контроля пьезокорректоров
 signed short gl_ssh_ampl_angle = 0;     //напряжение пропорциональное амплитуде выходного сигнала усилителя датчика угл. скорости
 
-signed short gl_ssh_Utd1 = 0;           //напряжение корпусного термодатчика
-signed short gl_ssh_Utd2 = 0;           //напряжение лазерного термодатчика
-signed short gl_ssh_Utd3 = 0;           //напряжение ? термодатчика
+signed short gl_ssh_Utd1 = 0;           //напряжение лазерного термодатчика1
+signed short gl_ssh_Utd2 = 0;           //напряжение лазерного термодатчика2
+signed short gl_ssh_Utd3 = 0;           //напряжение корпусного термодатчика
 signed short gl_ssh_Utd1_cal = 0;       //напряжение корпусного термодатчика (калибр.)
 signed short gl_ssh_Utd2_cal = 0;       //напряжение лазерного термодатчика (калибр.)
 signed short gl_ssh_Utd3_cal = 0;       //напряжение ? термодатчика (калибр.)
+double gl_dbl_Tutd1 = 0;                //температура термодатчика TD1 (КЛ1)
+double gl_dbl_Tutd2 = 0;                //температура термодатчика TD2 (КЛ2)
+double gl_dbl_Tutd3 = 0;                //температура термодатчика TD3 (корпус)
 
 signed short gl_ssh_SA_time = 0;        //период SA
 int gl_n_prT1VAL = 0x1000;              //засечка таймера для определения времени такта SA
@@ -129,6 +132,13 @@ signed short flashParam_calibT1;
 unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
 signed short flashParam_calibT2;
 unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
+
+//калибровка фазового сдвига
+signed short    gl_assh_calib_phsh_t[11];
+signed short   *gl_passh_calib_phsh_t;
+unsigned short  gl_aush_calib_phsh_phsh[11];
+unsigned short *gl_paush_calib_phsh_phsh;
+char gl_cPhaseShiftCalibrated;
 
 char gl_cCalibProcessState;
 char gl_bCalibrated;
@@ -961,12 +971,14 @@ void main() {
   char bSAFake = 0;
   int prt2val;
 
-  double V_piezo;
-  double temp_t;
-
   //переменные используемые в перевычислении коэффициента вычета
   double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
   float Coeff;
+
+  //указатели на массивы данных калибровки фазового сдвига
+  gl_passh_calib_phsh_t = gl_assh_calib_phsh_t;
+  gl_paush_calib_phsh_phsh = gl_aush_calib_phsh_phsh;
+  gl_cPhaseShiftCalibrated = 0; //not calibrated
 
   gl_cCalibProcessState = 0;    //0 - no calibration
 
@@ -1773,30 +1785,30 @@ void main() {
             gl_ssh_Utd3 = (ADCDAT >> 16);
             gl_ssh_Utd3_cal = gl_ssh_Utd3;
             if( gl_bCalibrated)
-              temp_t = ( double) gl_ssh_Utd3 * TD1_K + TD1_B;
+              gl_dbl_Tutd3 = ( double) gl_ssh_Utd3 * TD1_K + TD1_B;
             else
-              temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd3 / 4096. * 2.5) / 3.88e-6));
-            gl_ssh_Utd3 = ( short) ( ( temp_t + 100.) / 200. * 65535.);
+              gl_dbl_Tutd3 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd3 / 4096. * 2.5) / 3.88e-6));
+            gl_ssh_Utd3 = ( short) ( ( gl_dbl_Tutd3 + 100.) / 200. * 65535.);
           break;  //UTD3
 
           case 1: //UTD1
             gl_ssh_Utd1 = (ADCDAT >> 16);
             gl_ssh_Utd1_cal = gl_ssh_Utd1;
             if( gl_bCalibrated)
-              temp_t = ( double) gl_ssh_Utd1 * TD1_K + TD1_B;
+              gl_dbl_Tutd1 = ( double) gl_ssh_Utd1 * TD1_K + TD1_B;
             else
-              temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
-            gl_ssh_Utd1 = ( short) ( ( temp_t + 100.) / 200. * 65535.);
+              gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
+            gl_ssh_Utd1 = ( short) ( ( gl_dbl_Tutd2 + 100.) / 200. * 65535.);
           break;  //UTD1
 
           case 2: //UTD2
             gl_ssh_Utd2 = (ADCDAT >> 16);
             gl_ssh_Utd2_cal = gl_ssh_Utd2;
             if( gl_bCalibrated)
-              temp_t = ( double) gl_ssh_Utd2 * TD1_K + TD1_B;
+              gl_dbl_Tutd2 = ( double) gl_ssh_Utd2 * TD1_K + TD1_B;
             else
-              temp_t = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd2 / 4096. * 2.5) / 3.88e-6));
-            gl_ssh_Utd2 = ( short) ( ( temp_t + 100.) / 200. * 65535.);
+              gl_dbl_Tutd2 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd2 / 4096. * 2.5) / 3.88e-6));
+            gl_ssh_Utd2 = ( short) ( ( gl_dbl_Tutd2 + 100.) / 200. * 65535.);
           break;  //UTD2
 
           case 3: gl_ssh_current_1 = (ADCDAT >> 16); break;     //I1
@@ -2055,8 +2067,8 @@ void main() {
         // ************************************************************************************
         //Если канал =6, то есть мы только что перевелись с измерения напряжения пьезокорректоров
         if( ADCChannel == 6) {
-          V_piezo = (( gl_ssh_Perim_Voltage / 4095. * 2.5) - 1.23) * 101.;
-          if( fabs( V_piezo) > 100.) {
+          if( gl_ssh_Perim_Voltage > 3637 ||      //V_piezo > 100
+              gl_ssh_Perim_Voltage < 393) {       //V_piezo < -100
             //flashParamStartMode = 125;
             //DACConfiguration();
             GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
@@ -2219,6 +2231,12 @@ void main() {
             }
           }
 
+        }
+
+        //ПРИМЕМНИЕ КАЛИБРОВКИ ФАЗОВОГО СДВИГА
+        if( gl_cPhaseShiftCalibrated == 1) {
+          /*if( gl_dbl_Utd1) {
+          }*/
         }
 
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали

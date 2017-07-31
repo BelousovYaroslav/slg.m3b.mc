@@ -51,7 +51,7 @@ void check_params_p4( void);
 #define ADDR_DATE_D           0xF408
 #define ADDR_ORG              0xF40A    //16 bytes length
 
-// ADRESSES FOR FLASH-STORED PARAMS. PAGE 4
+// ADRESSES FOR FLASH-STORED PARAMS. PAGE 4   калибровка температурных датчиков
 #define ADDR_PAGE4            0xF600
 #define ADDR_TCALIB_T1        0xF600
 #define ADDR_TCALIB_T1_TD1    0xF602
@@ -61,4 +61,29 @@ void check_params_p4( void);
 #define ADDR_TCALIB_T2_TD1    0xF60A
 #define ADDR_TCALIB_T2_TD2    0xF60C
 #define ADDR_TCALIB_T2_TD3    0xF60E
+
+// ADRESSES FOR FLASH-STORED PARAMS. PAGE 5   калибровка фазового сдвига
+#define ADDR_PAGE5              0xF800
+#define ADDR_PHSH_CALIB_T1      0xF800
+#define ADDR_PHSH_CALIB_PHSH1   0xF802
+#define ADDR_PHSH_CALIB_T2      0xF804
+#define ADDR_PHSH_CALIB_PHSH2   0xF806
+#define ADDR_PHSH_CALIB_T3      0xF808
+#define ADDR_PHSH_CALIB_PHSH3   0xF80A
+#define ADDR_PHSH_CALIB_T4      0xF80C
+#define ADDR_PHSH_CALIB_PHSH4   0xF80E
+#define ADDR_PHSH_CALIB_T5      0xF800
+#define ADDR_PHSH_CALIB_PHSH5   0xF802
+#define ADDR_PHSH_CALIB_T6      0xF804
+#define ADDR_PHSH_CALIB_PHSH6   0xF806
+#define ADDR_PHSH_CALIB_T7      0xF808
+#define ADDR_PHSH_CALIB_PHSH7   0xF80A
+#define ADDR_PHSH_CALIB_T8      0xF80C
+#define ADDR_PHSH_CALIB_PHSH8   0xF80E
+#define ADDR_PHSH_CALIB_T9      0xF810
+#define ADDR_PHSH_CALIB_PHSH9   0xF812
+#define ADDR_PHSH_CALIB_T10     0xF814
+#define ADDR_PHSH_CALIB_PHSH10  0xF816
+#define ADDR_PHSH_CALIB_T11     0xF818
+#define ADDR_PHSH_CALIB_PHSH11  0xF81A
 #endif

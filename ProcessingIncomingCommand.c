@@ -38,6 +38,10 @@ extern unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_T
 extern char gl_bCalibrated;
 extern char gl_cCalibProcessState;
 
+//калибровка фазового сдвига
+extern signed short *gl_passh_calib_phsh_t;
+extern unsigned short *gl_paush_calib_phsh_phsh;
+
 extern unsigned short gl_ushFlashParamLastRULA;     //последнее RULA (obsolete)
 extern unsigned short gl_ushFlashParamLastRULM;     //последнее RULM (obsolete)
 
@@ -295,6 +299,14 @@ void processIncomingCommand( void) {
             flashParamOrg[14] = input_buffer[2]; break;
           case ORG_B16:   //установить Organization.byte16
             flashParamOrg[15] = input_buffer[2]; break;
+
+          case PH_SH_CALIB_T:   //Калибровка фазового сдвига. Точка N. Температура      0x39  "9"
+            gl_passh_calib_phsh_t[ input_buffer[2]] = ( signed short) input_buffer[3];
+          break;
+
+          case PH_SH_CALIB_PH_SH:  //Калибровка фазового сдвига. Точка N. Соотв. фазовый сдвиг   0x3A  ":"
+            gl_paush_calib_phsh_phsh[ input_buffer[2]] = ( unsigned short) input_buffer[3];
+          break;
         }
       break;
 
