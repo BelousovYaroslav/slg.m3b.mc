@@ -50,13 +50,13 @@ unsigned short gl_ush_MeanImpulses = 1;
 //unsigned int gl_un_RULAControl = 1638;    //1638 = 1.000 V
 //unsigned int gl_un_RULAControl = 2457;    //2457 = 1.500 V
 unsigned int gl_un_RULAControl = 4095;      //4095 = 2.500 V
-unsigned int nDelta = ( RULA_MAX - RULA_MIN) / 4;
+unsigned int gl_nDelta = ( RULA_MAX - RULA_MIN) / 4;
 
 
 char gl_c_EmergencyCode = 0;            //код ошибки
 
 //Буфер входящих команд
-char input_buffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
+char gl_acInputBuffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
 char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
 
 int gl_n3kVapplies = 0;                 //число 3kV импульсов при поджиге
@@ -75,8 +75,9 @@ char gl_bSimpleDnDuRegime = 0;          //флаг режима "частотной нарезки" (выдач
 //Засечки таймеров
 int gl_nRppTimerT2 = 0;                 //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
 
-short gl_nSentPackIndex;                //индекс выдаваемой посылки
-char gl_c_OutPackCounter = 0;           //выдаваемый наружу счётчик посылок
+short gl_nSentAddParamIndex;            //индекс аналогового (доп.) параметра выдаваемого в посылке
+short gl_nSentAddParamSubIndex;         //под-индекс аналогового (доп.) параметра выдаваемого в посылке
+char  gl_c_OutPackCounter = 0;          //выдаваемый наружу счётчик посылок
 
 int ADCChannel = 0; //читаемый канал АЦП
                     //0 = ADC0 = UTD3
@@ -87,10 +88,12 @@ int ADCChannel = 0; //читаемый канал АЦП
                     //5 = ADC5 = CntrPC
                     //6 = ADC6 = AmplAng
 
-//переменные учатсвующие в счётчике секунд относительно старта прибора
+//переменные участвующие в счётчике секунд относительно старта прибора
 long gl_lSecondsFromStart;
 long gl_l5SecPrevValue;
+long gl_lCalibratedPhaseShiftApplySecs;
 int gl_nSecondsT2Lock;
+
 
 //********************
 #define ADC_CHANNEL_UTD1    0
@@ -127,21 +130,25 @@ unsigned short gl_ushFlashParamLastRULM = 0;      //последнее RULM (obsolete)
 
 double dStartAmplAngCheck = 0.5;
 
+//список выдаваемых аналоговых (доплонительных) параметров
+unsigned short gl_aushListOutputAddParams[12];
+int nSentPackListIndex;
+
 //калибровка термодатчиков
 signed short flashParam_calibT1;
 unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
 signed short flashParam_calibT2;
 unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
+short gl_shFlashParamTCalibUsage;         //флаг использования калбировки термодатчиков: 0 - используется, REST (предпочитаю 0xFF) - не используется
 
 //калибровка фазового сдвига
-signed short    gl_assh_calib_phsh_t[11];
-signed short   *gl_passh_calib_phsh_t;
-unsigned short  gl_aush_calib_phsh_phsh[11];
-unsigned short *gl_paush_calib_phsh_phsh;
-char gl_cPhaseShiftCalibrated;
+char gl_ac_calib_phsh_t[11];        //массив точек температур фазового сдвига
+char gl_ac_calib_phsh_phsh[11];     //массив точек значений фазового сдвига, соответствующих температурам, описанным выше
+char gl_cFlashParamPhaseShiftUsage; //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - не используется
+char gl_cCurrentPhaseShift;         //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF
 
 char gl_cCalibProcessState;
-char gl_bCalibrated;
+char gl_bTDCalibrated;
 double TD1_K, TD1_B;
 double TD2_K, TD2_B;
 
@@ -185,7 +192,7 @@ void FIQ_Handler (void) __fiq
   char tmp;
   if( ( FIQSTA & UART_BIT) != 0) {
     if( pos_in_in_buf < IN_COMMAND_BUF_LEN)
-      input_buffer[ pos_in_in_buf++] = COMRX;
+      gl_acInputBuffer[ pos_in_in_buf++] = COMRX;
     else
       tmp = COMRX;
     //GP0DAT = ( 1 << 16);
@@ -218,7 +225,7 @@ double round( double val) {
 }*/
 
 void send_pack( short shAnalogueParamValue) {
-  short shAnalogueParamIndicator = gl_nSentPackIndex;
+  short shAnalogueParamIndicator = gl_nSentAddParamIndex;
   signed short angle_inc1 = ( 65536 + gl_ssh_angle_inc - gl_ssh_angle_inc_prev) % 65536;
 
   char cCheckSumm = 0;
@@ -435,14 +442,15 @@ void send_pack( short shAnalogueParamValue) {
   b3 = pntr[2];
   b4 = pntr[3];
 
-  /*
-  printf("(0x55 0xAA)   (0x%02x 0x%02x 0x%02x 0x%02x)   (0x%02x)   (0x?? 0x??)   (0x?? 0x??)  (0x%02x)   (0x%02x)   (0x??)\n",
-          b1, b2, b3, b4,
-          ( ( gl_n_PerimeterReset > 0) ? 0x80 : 0x00) + param_indicator & 0xff,
-          gl_c_OutPackCounter++,
-          gl_c_EmergencyCode
-          );
-  */
+  #if DEBUG == 2
+    printf("(0x55 0xAA)   (0x%02x 0x%02x 0x%02x 0x%02x)   (0x%02x)   (0x?? 0x??)   (0x?? 0x??)  (0x%02x)   (0x%02x)   (0x??)\n",
+            b1, b2, b3, b4,
+            ( ( gl_n_PerimeterReset > 0) ? 0x80 : 0x00) + shAnalogueParamIndicator & 0xff,
+            gl_c_OutPackCounter++,
+            gl_c_EmergencyCode
+            );
+  #endif
+
 #endif
 }
 
@@ -742,10 +750,10 @@ void ThermoCalibrationCalculation( void)
     TD2_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
     TD2_K = ( y2 - y1) / ( x2 - x1);
 
-    gl_bCalibrated = 1;
+    gl_bTDCalibrated = 1;
   }
   else
-    gl_bCalibrated = 0;
+    gl_bTDCalibrated = 0;
 }
 
 void InitBaudRate115200() {
@@ -947,6 +955,43 @@ void testPike() {
   GP0DAT &= ~( 1 << ( 16));	//тестовая линия p0.0 clear
 }
 
+char isAddParamDecriptorInList( int nAddParamDescriptor) {
+  char cInList = 0;
+  int i;
+  for( i=0; i<12; i++) {
+    if( gl_aushListOutputAddParams[ i] == nAddParamDescriptor) {
+      cInList = 1;
+      break;
+    }
+  }
+  return cInList;
+}
+
+int getNextAddParamDescriptorToSendFromList() {
+  int nResult;
+  char cGoOn, cCnt;
+
+  nResult = gl_aushListOutputAddParams[ nSentPackListIndex];
+  if ( nResult < 0 || nResult > 254){
+    cGoOn = 1; cCnt = 0;
+    do {
+      cCnt++;
+      nSentPackListIndex = (++nSentPackListIndex) % 12;
+      nResult = gl_aushListOutputAddParams[ nSentPackListIndex];
+      if ( nResult < 0 || nResult > 254){
+        if( cCnt > 12)
+          return UTD1;
+      }
+      else
+        cGoOn = 0;
+
+    } while( cGoOn);
+  }
+
+  nSentPackListIndex = (++nSentPackListIndex) % 12;
+  return nResult;
+}
+
 void main() {
   //unsigned short ush_SA_check_time;
 
@@ -975,12 +1020,17 @@ void main() {
   double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
   float Coeff;
 
-  //указатели на массивы данных калибровки фазового сдвига
-  gl_passh_calib_phsh_t = gl_assh_calib_phsh_t;
-  gl_paush_calib_phsh_phsh = gl_aush_calib_phsh_phsh;
-  gl_cPhaseShiftCalibrated = 0; //not calibrated
 
-  gl_cCalibProcessState = 0;    //0 - no calibration
+  //по умолчанию мы НЕ ИСПОЛЬЗУЕМ фазовый сдвиг
+  gl_cFlashParamPhaseShiftUsage = 0xFF;
+  //по умолчанию выставленный байт фазового сдвига = 0xFF (что трактуется как не выставлено)
+  gl_cCurrentPhaseShift = 0xFF;
+
+  //по умолчанию мы НЕ ИСПОЛЬЗУЕМ калибровку термодатчиков
+  gl_shFlashParamTCalibUsage = 0xFF;
+
+  //проведение калибровки термодатчиков
+  gl_cCalibProcessState = 0;    //0 - no calibration process going on
 
                                 //1 - processing min_t_point 1st thermosensor
                                 //2 - processing min_t_point 2nd thermosensor
@@ -1057,10 +1107,12 @@ void main() {
 
   GP2DAT |= 1 << (24 + 2);  //Конфигурация линии EN_VB               (p2.2) в качестве выхода
   GP2DAT |= 1 << (24 + 5);  //Конфигурация линии RDLBANGLE           (p2.5) в качестве выхода
+  GP2DAT |= 1 << (24 + 6);  //Конфигурация линии SET_PS_SH_ACT       (p2.6) в качестве выхода
 
   GP3DAT |= 1 << (24 + 0);  //Конфигурация линии TactNoise0          (p3.0) в качестве выхода
   GP3DAT |= 1 << (24 + 1);  //Конфигурация линии TactNoise1          (p3.1) в качестве выхода
   GP3DAT |= 1 << (24 + 3);  //Конфигурация линии RD_AMPL_T_CODE      (p3.3) в качестве выхода
+  GP3DAT |= 1 << (24 + 4);  //Конфигурация линии SET_PS_SH_LINE      (p3.4) в качестве выхода
   GP3DAT |= 1 << (24 + 5);  //Конфигурация линии OutLnfType          (p3.5) в качестве выхода
 
   GP4DAT |= 1 << (24 + 0);  //Конфигурация линии ONHV                (p4.0) в качестве выхода
@@ -1072,14 +1124,17 @@ void main() {
   printf("done\n");
   printf("DEBUG: GPIO lines values configuration...");
 #endif
-  GP4DAT |=    1 << (16 + 0);  //ONHV        (p4.0) = 1 (выключено)
-  GP4DAT &= ~( 1 << (16 + 1)); //OFF3KV      (p4.1) = 0 (включено)
+  GP4DAT |=    1 << (16 + 0);   //ONHV            (p4.0) = 1 (выключено)
+  GP4DAT &= ~( 1 << (16 + 1));  //OFF3KV          (p4.1) = 0 (включено)
 
-  GP2DAT &= ~( 1 << (16 + 2));  //EN_VB       (p2.2) = 0
+  GP3DAT |=    1 << (16 + 4);   //SET_PS_SH_LINE  (p3.4) = 1 (передача данных по шине направлена к микроконтроллеру)
 
-  GP1DAT &= ~( 1 << (16 + 7));  //EN_RP       (p1.7) = 0
+  GP2DAT &= ~( 1 << (16 + 2));  //EN_VB           (p2.2) = 0
+  GP2DAT &= ~( 1 << (16 + 6));  //SET_PS_SH_ACT   (p2.6) = 0 (команда записи фазового сдвига - изначальное состояние в 0)
 
-  GP0DAT &= ~( 1 << (16 + 5));  //RP_P        (p0.5) = 0
+  GP1DAT &= ~( 1 << (16 + 7));  //EN_RP           (p1.7) = 0
+
+  GP0DAT &= ~( 1 << (16 + 5));  //RP_P            (p0.5) = 0
 
 
 #ifdef DEBUG
@@ -1197,6 +1252,7 @@ void main() {
   gl_lSecondsFromStart = 0;
   gl_l5SecPrevValue = 0;
   gl_nSecondsT2Lock = T2VAL;
+  gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
 
   //**********************************************************************
   // Конфигурация и выставка ЦАП
@@ -1260,16 +1316,17 @@ void main() {
     ADCCON |= 0x80;
     while (!( ADCSTA & 0x01)){}
     gl_ssh_ampl_angle = (ADCDAT >> 16);
-
+  /*
   #ifdef DEBUG
     printf("DEBUG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
   #endif
-
+  */
     if( ( ( double) gl_ssh_ampl_angle / 4095. * 2.5) > dStartAmplAngCheck) {
       //SUCCESS
 
       #ifdef DEBUG
-        printf("DEBUG: Hangerup vibration control: successfully passed\n");
+        //printf("DEBUG: Hangerup vibration control: successfully passed\n");
+        printf("DEBUG: Hangerup vibration control: successfully passed with AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
       #endif
 
       break;
@@ -1587,17 +1644,20 @@ void main() {
   gl_n_PerimeterReset = 1;
 
   //Starting packs.VERSION
-  gl_nSentPackIndex = VERSION;
+  gl_nSentAddParamIndex = VERSION;
   send_pack( ( ( VERSION_MINOR * 16) << 8) + ( VERSION_MAJOR * 16 + VERSION_MIDDLE));
 
   //Starting packs.Device_Num
-  gl_nSentPackIndex = DEVNUM;
+  gl_nSentAddParamIndex = DEVNUM;
   send_pack( flashParamDeviceId);
 
   //FAKE ('VERACITY DATA' flag off)
   gl_n_PerimeterReset = 0;
 
-  gl_nSentPackIndex = UTD1;
+  //берем первый доп. параметр из списка
+  nSentPackListIndex = 0;
+  gl_nSentAddParamIndex = getNextAddParamDescriptorToSendFromList();
+
 
   //**********************************************************************
   //**********************************************************************
@@ -1784,7 +1844,7 @@ void main() {
           case 0: //UTD3
             gl_ssh_Utd3 = (ADCDAT >> 16);
             gl_ssh_Utd3_cal = gl_ssh_Utd3;
-            if( gl_bCalibrated)
+            if( gl_bTDCalibrated)
               gl_dbl_Tutd3 = ( double) gl_ssh_Utd3 * TD1_K + TD1_B;
             else
               gl_dbl_Tutd3 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd3 / 4096. * 2.5) / 3.88e-6));
@@ -1794,7 +1854,7 @@ void main() {
           case 1: //UTD1
             gl_ssh_Utd1 = (ADCDAT >> 16);
             gl_ssh_Utd1_cal = gl_ssh_Utd1;
-            if( gl_bCalibrated)
+            if( gl_bTDCalibrated)
               gl_dbl_Tutd1 = ( double) gl_ssh_Utd1 * TD1_K + TD1_B;
             else
               gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
@@ -1804,7 +1864,7 @@ void main() {
           case 2: //UTD2
             gl_ssh_Utd2 = (ADCDAT >> 16);
             gl_ssh_Utd2_cal = gl_ssh_Utd2;
-            if( gl_bCalibrated)
+            if( gl_bTDCalibrated)
               gl_dbl_Tutd2 = ( double) gl_ssh_Utd2 * TD1_K + TD1_B;
             else
               gl_dbl_Tutd2 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd2 / 4096. * 2.5) / 3.88e-6));
@@ -1842,7 +1902,7 @@ void main() {
                 flashParamT1_TD3_val = gl_ssh_Utd3_cal;
                 gl_cCalibProcessState = 0;
                 save_params_p4();
-                gl_nSentPackIndex = CALIB_T1;
+                gl_nSentAddParamIndex = CALIB_T1;
               }
             break;
 
@@ -1867,7 +1927,7 @@ void main() {
                 flashParamT2_TD3_val = gl_ssh_Utd3_cal;
                 gl_cCalibProcessState = 0;
                 save_params_p4();
-                gl_nSentPackIndex = CALIB_T1;
+                gl_nSentAddParamIndex = CALIB_T1;
               }
 
             break;
@@ -1939,8 +1999,8 @@ void main() {
         testPike();
 
         if( gl_lSecondsFromStart - gl_l5SecPrevValue > 5) {
-          if( gl_nSentPackIndex == UTD1) {
-            gl_nSentPackIndex = SECONDS_FROM_START;
+          if( gl_nSentAddParamIndex == UTD1) {
+            gl_nSentAddParamIndex = SECONDS_FROM_START;
             gl_l5SecPrevValue = gl_lSecondsFromStart;
           }
         }
@@ -1948,86 +2008,150 @@ void main() {
         //**********************************************************************
         // Выдача данных согласно протоколу
         //**********************************************************************
-        switch( gl_nSentPackIndex) {
+        switch( gl_nSentAddParamIndex) {
           //****************************************************************************************************************************************************************
           //REGULAR PACK
           //****************************************************************************************************************************************************************
-          case UTD1:            send_pack( gl_ssh_Utd1);           gl_nSentPackIndex = UTD2;            break; //UTD1
-          case UTD2:            send_pack( gl_ssh_Utd2);           gl_nSentPackIndex = UTD3;            break; //UTD2
-          case UTD3:            send_pack( gl_ssh_Utd3);           gl_nSentPackIndex = I1;              break; //UTD3
-          case I1:              send_pack( gl_ssh_current_1);      gl_nSentPackIndex = I2;              break; //I1
-          case I2:              send_pack( gl_ssh_current_2);      gl_nSentPackIndex = CNTRPC;          break; //I2
-          case CNTRPC:          send_pack( gl_ssh_Perim_Voltage);  gl_nSentPackIndex = AMPLANG_DUS;     break; //CntrPc
-          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses << 1); gl_nSentPackIndex = RULA;         break; //AmplAng от альтеры
-          case AMPLANG_DUS:     send_pack( gl_ssh_ampl_angle);     gl_nSentPackIndex = RULA;            break; //AmplAng с ДУСа
-          case RULA:            send_pack( gl_un_RULAControl);     gl_nSentPackIndex = AMPL_HOLD_MEAN;  break; //RULA
+          case UTD1:            send_pack( gl_ssh_Utd1);              break; //UTD1
+          case UTD2:            send_pack( gl_ssh_Utd2);              break; //UTD2
+          case UTD3:            send_pack( gl_ssh_Utd3);              break; //UTD3
+          case I1:              send_pack( gl_ssh_current_1);         break; //I1
+          case I2:              send_pack( gl_ssh_current_2);         break; //I2
+          case CNTRPC:          send_pack( gl_ssh_Perim_Voltage);     break; //CntrPc
+          case AMPLANG_ALTERA:  send_pack( gl_ush_MeanImpulses << 1); break; //AmplAng от альтеры
+          case AMPLANG_DUS:     send_pack( gl_ssh_ampl_angle);        break; //AmplAng с ДУСа
+          case RULA:            send_pack( gl_un_RULAControl);        break; //RULA
 
           //****************************************************************************************************************************************************************
           // PARAMETERS BY REQUEST
           //****************************************************************************************************************************************************************
 
-          case AMPLITUDE:       send_pack( flashParamAmplitudeCode);  gl_nSentPackIndex = UTD1;        break; //Уставка амплитуды колебания
-          case TACT_CODE:       send_pack( flashParamTactCode);    gl_nSentPackIndex = UTD1;           break; //Уставка кода такта подставки
-          case M_COEFF:         send_pack( flashParamMCoeff);      gl_nSentPackIndex = UTD1;           break; //Уставка коэффициента ошумления
-          case STARTMODE:       send_pack( flashParamStartMode);   gl_nSentPackIndex = UTD1;           break; //Уставка начальной моды
-          case DECCOEFF:        send_pack( flashParamDecCoeff);    gl_nSentPackIndex = UTD1;           break; //Коэффициент вычета
-          case CONTROL_I1:      send_pack( flashParamI1min);       gl_nSentPackIndex = CONTROL_I2;     break; //flashParamI1min
-          case CONTROL_I2:      send_pack( flashParamI2min);       gl_nSentPackIndex = CONTROL_AA;     break; //flashParamI2min
-          case CONTROL_AA:      send_pack( flashParamAmplAngMin1); gl_nSentPackIndex = UTD1;           break; //flashParamAmplAngMin1
+          case AMPLITUDE:       send_pack( flashParamAmplitudeCode);  break; //Уставка амплитуды колебания
+          case TACT_CODE:       send_pack( flashParamTactCode);       break; //Уставка кода такта подставки
+          case M_COEFF:         send_pack( flashParamMCoeff);         break; //Уставка коэффициента ошумления
+          case STARTMODE:       send_pack( flashParamStartMode);      break; //Уставка начальной моды
+          case DECCOEFF:        send_pack( flashParamDecCoeff);       break; //Коэффициент вычета
+          case CONTROL_I1:      send_pack( flashParamI1min);          break; //flashParamI1min
+          case CONTROL_I2:      send_pack( flashParamI2min);          break; //flashParamI2min
+          case CONTROL_AA:      send_pack( flashParamAmplAngMin1);    break; //flashParamAmplAngMin1
 
           /*
-          case HV_APPLY_COUNT_SET: send_pack( flashParamHvApplyCount); gl_nSentPackIndex = UTD1;        break; //HV apply cycles in pack
+          case HV_APPLY_COUNT_SET: send_pack( flashParamHvApplyCount);  break; //HV apply cycles in pack
           */
-          case HV_APPLY_COUNT_TR:  send_pack( gl_n3kVapplies);         gl_nSentPackIndex = UTD1;        break; //HV apply cycles applied in this run
+          case HV_APPLY_COUNT_TR:  send_pack( gl_n3kVapplies);        break; //HV apply cycles applied in this run
           /*
-          case HV_APPLY_DURAT_SET: send_pack( flashParamHvApplyDurat); gl_nSentPackIndex = UTD1;        break; //HV apply cycle duration
-          case HV_APPLY_PACKS:     send_pack( flashParamHvApplyPacks); gl_nSentPackIndex = UTD1;        break; //HV apply packs
+          case HV_APPLY_DURAT_SET: send_pack( flashParamHvApplyDurat); break; //HV apply cycle duration
+          case HV_APPLY_PACKS:     send_pack( flashParamHvApplyPacks); break; //HV apply packs
           */
 
-          case SIGNCOEFF:       send_pack( flashParamSignCoeff);        gl_nSentPackIndex = UTD1;       break; //Уставка знакового коэффициента
-          case DEVNUM:          send_pack( flashParamDeviceId);         gl_nSentPackIndex = UTD1;       break; //Device_Num
+          case SIGNCOEFF:       send_pack( flashParamSignCoeff);      break; //Уставка знакового коэффициента
+          case DEVNUM:          send_pack( flashParamDeviceId);       break; //Device_Num
 
-          case DATE_Y:          send_pack( flashParamDateYear);    gl_nSentPackIndex = UTD1;          break; //Date.Year
-          case DATE_M:          send_pack( flashParamDateMonth);   gl_nSentPackIndex = UTD1;          break; //Date.Month
-          case DATE_D:          send_pack( flashParamDateDay);     gl_nSentPackIndex = UTD1;          break; //Date.Day
+          case DATE_Y:          send_pack( flashParamDateYear);       break; //Date.Year
+          case DATE_M:          send_pack( flashParamDateMonth);      break; //Date.Month
+          case DATE_D:          send_pack( flashParamDateDay);        break; //Date.Day
 
-          case ORG_B1:          send_pack( flashParamOrg[ 0]);     gl_nSentPackIndex = ORG_B2;        break; //Organization.Byte1
-          case ORG_B2:          send_pack( flashParamOrg[ 1]);     gl_nSentPackIndex = ORG_B3;        break; //Organization.Byte2
-          case ORG_B3:          send_pack( flashParamOrg[ 2]);     gl_nSentPackIndex = ORG_B4;        break; //Organization.Byte3
-          case ORG_B4:          send_pack( flashParamOrg[ 3]);     gl_nSentPackIndex = ORG_B5;        break; //Organization.Byte4
-          case ORG_B5:          send_pack( flashParamOrg[ 4]);     gl_nSentPackIndex = ORG_B6;        break; //Organization.Byte5
-          case ORG_B6:          send_pack( flashParamOrg[ 5]);     gl_nSentPackIndex = ORG_B7;        break; //Organization.Byte6
-          case ORG_B7:          send_pack( flashParamOrg[ 6]);     gl_nSentPackIndex = ORG_B8;        break; //Organization.Byte7
-          case ORG_B8:          send_pack( flashParamOrg[ 7]);     gl_nSentPackIndex = ORG_B9;        break; //Organization.Byte8
-          case ORG_B9:          send_pack( flashParamOrg[ 8]);     gl_nSentPackIndex = ORG_B10;       break; //Organization.Byte9
-          case ORG_B10:         send_pack( flashParamOrg[ 9]);     gl_nSentPackIndex = ORG_B11;       break; //Organization.Byte10
-          case ORG_B11:         send_pack( flashParamOrg[10]);     gl_nSentPackIndex = ORG_B12;       break; //Organization.Byte11
-          case ORG_B12:         send_pack( flashParamOrg[11]);     gl_nSentPackIndex = ORG_B13;       break; //Organization.Byte12
-          case ORG_B13:         send_pack( flashParamOrg[12]);     gl_nSentPackIndex = ORG_B14;       break; //Organization.Byte13
-          case ORG_B14:         send_pack( flashParamOrg[13]);     gl_nSentPackIndex = ORG_B15;       break; //Organization.Byte14
-          case ORG_B15:         send_pack( flashParamOrg[14]);     gl_nSentPackIndex = ORG_B16;       break; //Organization.Byte15
-          case ORG_B16:         send_pack( flashParamOrg[15]);     gl_nSentPackIndex = UTD1;          break; //Organization.Byte16    БЕЗ завершающего 0 на конце!!!!!
+          case ORG_B1:          send_pack( flashParamOrg[ 0]);        break; //Organization.Byte1
+          case ORG_B2:          send_pack( flashParamOrg[ 1]);        break; //Organization.Byte2
+          case ORG_B3:          send_pack( flashParamOrg[ 2]);        break; //Organization.Byte3
+          case ORG_B4:          send_pack( flashParamOrg[ 3]);        break; //Organization.Byte4
+          case ORG_B5:          send_pack( flashParamOrg[ 4]);        break; //Organization.Byte5
+          case ORG_B6:          send_pack( flashParamOrg[ 5]);        break; //Organization.Byte6
+          case ORG_B7:          send_pack( flashParamOrg[ 6]);        break; //Organization.Byte7
+          case ORG_B8:          send_pack( flashParamOrg[ 7]);        break; //Organization.Byte8
+          case ORG_B9:          send_pack( flashParamOrg[ 8]);        break; //Organization.Byte9
+          case ORG_B10:         send_pack( flashParamOrg[ 9]);        break; //Organization.Byte10
+          case ORG_B11:         send_pack( flashParamOrg[10]);        break; //Organization.Byte11
+          case ORG_B12:         send_pack( flashParamOrg[11]);        break; //Organization.Byte12
+          case ORG_B13:         send_pack( flashParamOrg[12]);        break; //Organization.Byte13
+          case ORG_B14:         send_pack( flashParamOrg[13]);        break; //Organization.Byte14
+          case ORG_B15:         send_pack( flashParamOrg[14]);        break; //Organization.Byte15
+          case ORG_B16:         send_pack( flashParamOrg[15]);        break; //Organization.Byte16    БЕЗ завершающего 0 на конце!!!!!
 
-          case VERSION:         send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE)); gl_nSentPackIndex = UTD1; break; //SOFTWARE VERSION
+          case VERSION:         send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE)); break; //SOFTWARE VERSION
 
-          case CALIB_T1:        send_pack( flashParam_calibT1);    gl_nSentPackIndex = T1_TD1;        break; //min thermo-calib point T
-          case T1_TD1:          send_pack( flashParamT1_TD1_val);  gl_nSentPackIndex = T1_TD2;        break; //min thermo-calib point thermo1 data
-          case T1_TD2:          send_pack( flashParamT1_TD2_val);  gl_nSentPackIndex = T1_TD3;        break; //min thermo-calib point thermo2 data
-          case T1_TD3:          send_pack( flashParamT1_TD3_val);  gl_nSentPackIndex = CALIB_T2;      break; //min thermo-calib point thermo3 data
-          case CALIB_T2:        send_pack( flashParam_calibT2);    gl_nSentPackIndex = T2_TD1;        break; //max thermo-calib point T
-          case T2_TD1:          send_pack( flashParamT2_TD1_val);  gl_nSentPackIndex = T2_TD2;        break; //max thermo-calib point thermo1 data
-          case T2_TD2:          send_pack( flashParamT2_TD2_val);  gl_nSentPackIndex = T2_TD3;        break; //max thermo-calib point thermo2 data
-          case T2_TD3:          send_pack( flashParamT2_TD3_val);  gl_nSentPackIndex = UTD1;          break; //max thermo-calib point thermo3 data
+          case CALIB_T1:        send_pack( flashParam_calibT1);       break; //min thermo-calib point T
+          case T1_TD1:          send_pack( flashParamT1_TD1_val);     break; //min thermo-calib point thermo1 data
+          case T1_TD2:          send_pack( flashParamT1_TD2_val);     break; //min thermo-calib point thermo2 data
+          case T1_TD3:          send_pack( flashParamT1_TD3_val);     break; //min thermo-calib point thermo3 data
+          case CALIB_T2:        send_pack( flashParam_calibT2);       break; //max thermo-calib point T
+          case T2_TD1:          send_pack( flashParamT2_TD1_val);     break; //max thermo-calib point thermo1 data
+          case T2_TD2:          send_pack( flashParamT2_TD2_val);     break; //max thermo-calib point thermo2 data
+          case T2_TD3:          send_pack( flashParamT2_TD3_val);     break; //max thermo-calib point thermo3 data
 
-          case AMPL_HOLD_MEAN:  send_pack( gl_lnMeanImps);              gl_nSentPackIndex = AMPL_HOLD_ROUND;   break; //amplitude hold algoryhtm: mean
-          case AMPL_HOLD_ROUND: send_pack( gl_snMeaningCounterRound);   gl_nSentPackIndex = AMPL_HOLD_ACTIVE;  break; //amplitude hold algoryhtm: round
-          case AMPL_HOLD_ACTIVE:send_pack( gl_nActiveRegulationT2?1:0); gl_nSentPackIndex = UTD1;              break; //amplitude hold algoryhtm: falg of active regulation
+          case AMPL_HOLD_MEAN:  send_pack( gl_lnMeanImps);              break; //amplitude hold algoryhtm: mean
+          case AMPL_HOLD_ROUND: send_pack( gl_snMeaningCounterRound);   break; //amplitude hold algoryhtm: round
+          case AMPL_HOLD_ACTIVE:send_pack( gl_nActiveRegulationT2?1:0); break; //amplitude hold algoryhtm: falg of active regulation
 
-          case SECONDS_FROM_START: send_pack( gl_lSecondsFromStart);    gl_nSentPackIndex = UTD1;              break; //From start seconds timer
+          case SECONDS_FROM_START: send_pack( gl_lSecondsFromStart & 0xFFFF);    break; //From start seconds timer
+
+          case SLG_ADDITIONAL_PARAM_LIST_ELEMENT:
+                                send_pack( ( ( gl_aushListOutputAddParams[ gl_nSentAddParamSubIndex] & 0xFF) << 8) + gl_nSentAddParamSubIndex);
+                                                                                 break; //element of analogue (additional) output list
+
+          case PH_SH_CALIB_T:
+                              send_pack( ( gl_ac_calib_phsh_t[ gl_nSentAddParamSubIndex] << 8) + gl_nSentAddParamSubIndex);
+                                                                                 break; //калибровка фазового сдвига. температура
+
+          case PH_SH_CALIB_PH_SH:
+                              send_pack( ( gl_ac_calib_phsh_phsh[ gl_nSentAddParamSubIndex] << 8) + gl_nSentAddParamSubIndex);
+                                                                                 break; //калибровка фазового сдвига. фазовый сдвиг
+
+
+          case PH_SH_USAGE:   send_pack( gl_cFlashParamPhaseShiftUsage);         break; //калибровка фазового сдвига. использование
+
+          case PH_SH_CURRENT_VAL: 
+                              send_pack( gl_cCurrentPhaseShift);                  break; //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
+
+        }
+
+        //ДАВАЙТЕ определим, какой доп. параметр мы выдадим в следующий раз
+        if( isAddParamDecriptorInList( gl_nSentAddParamIndex)) {
+          //если текущий выданный доп. параметр из списка - то берем следующий из списка
+          gl_nSentAddParamIndex = getNextAddParamDescriptorToSendFromList();
+        }
+        else {
+          //если текущий выданный доп. параметр не из списка
+          switch( gl_nSentAddParamIndex) {
+            case CONTROL_I1:      gl_nSentAddParamIndex = CONTROL_I2;     break; //flashParamI1min
+            case CONTROL_I2:      gl_nSentAddParamIndex = CONTROL_AA;     break; //flashParamI2min
+
+            case ORG_B1:          gl_nSentAddParamIndex = ORG_B2;        break; //Organization.Byte1
+            case ORG_B2:          gl_nSentAddParamIndex = ORG_B3;        break; //Organization.Byte2
+            case ORG_B3:          gl_nSentAddParamIndex = ORG_B4;        break; //Organization.Byte3
+            case ORG_B4:          gl_nSentAddParamIndex = ORG_B5;        break; //Organization.Byte4
+            case ORG_B5:          gl_nSentAddParamIndex = ORG_B6;        break; //Organization.Byte5
+            case ORG_B6:          gl_nSentAddParamIndex = ORG_B7;        break; //Organization.Byte6
+            case ORG_B7:          gl_nSentAddParamIndex = ORG_B8;        break; //Organization.Byte7
+            case ORG_B8:          gl_nSentAddParamIndex = ORG_B9;        break; //Organization.Byte8
+            case ORG_B9:          gl_nSentAddParamIndex = ORG_B10;       break; //Organization.Byte9
+            case ORG_B10:         gl_nSentAddParamIndex = ORG_B11;       break; //Organization.Byte10
+            case ORG_B11:         gl_nSentAddParamIndex = ORG_B12;       break; //Organization.Byte11
+            case ORG_B12:         gl_nSentAddParamIndex = ORG_B13;       break; //Organization.Byte12
+            case ORG_B13:         gl_nSentAddParamIndex = ORG_B14;       break; //Organization.Byte13
+            case ORG_B14:         gl_nSentAddParamIndex = ORG_B15;       break; //Organization.Byte14
+            case ORG_B15:         gl_nSentAddParamIndex = ORG_B16;       break; //Organization.Byte15
+
+
+            case CALIB_T1:        gl_nSentAddParamIndex = T1_TD1;        break; //min thermo-calib point T
+            case T1_TD1:          gl_nSentAddParamIndex = T1_TD2;        break; //min thermo-calib point thermo1 data
+            case T1_TD2:          gl_nSentAddParamIndex = T1_TD3;        break; //min thermo-calib point thermo2 data
+            case T1_TD3:          gl_nSentAddParamIndex = CALIB_T2;      break; //min thermo-calib point thermo3 data
+            case CALIB_T2:        gl_nSentAddParamIndex = T2_TD1;        break; //max thermo-calib point T
+            case T2_TD1:          gl_nSentAddParamIndex = T2_TD2;        break; //max thermo-calib point thermo1 data
+            case T2_TD2:          gl_nSentAddParamIndex = T2_TD3;        break; //max thermo-calib point thermo2 data
+
+
+            case AMPL_HOLD_MEAN:  gl_nSentAddParamIndex = AMPL_HOLD_ROUND;   break; //amplitude hold algoryhtm: mean
+            case AMPL_HOLD_ROUND: gl_nSentAddParamIndex = AMPL_HOLD_ACTIVE;  break; //amplitude hold algoryhtm: round
+
+            default:
+              gl_nSentAddParamIndex = getNextAddParamDescriptorToSendFromList();
+          }
         }
 
         //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
-        if( gl_b_SyncMode && ( gl_nSentPackIndex != UTD2)) {
+        if( gl_b_SyncMode && ( gl_nSentAddParamIndex != UTD2)) {
           dbl_N1 = ( double) gl_ssh_angle_inc_prev;
           dbl_N2 = ( double) gl_ssh_angle_inc;
           dbl_U1 = ( double) gl_ssh_angle_hanger_prev;
@@ -2045,7 +2169,7 @@ void main() {
               flashParamDecCoeff = ( short) ( ( int) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
               gl_dbl_Nsumm = gl_dbl_Usumm = 0.;
               gl_un_DecCoeffStatPoints = 0;
-              gl_nSentPackIndex = DECCOEFF;
+              gl_nSentAddParamIndex = DECCOEFF;
             }
           }
         }
@@ -2100,26 +2224,26 @@ void main() {
             if( abs( gl_lnMeanImps - ( flashParamAmplitudeCode << 4)) > 1) {    //то есть амплитуду не трогаем если средняя не дальше 1/16 от заданной
               if( gl_lnMeanImps > ( flashParamAmplitudeCode << 4)) {
 
-                //gl_un_RULAControl -= nDelta;
+                //gl_un_RULAControl -= gl_nDelta;
 
-                if( nDelta >= gl_un_RULAControl) {
+                if( gl_nDelta >= gl_un_RULAControl) {
                   //delta = cRULAControl;
                   gl_un_RULAControl = gl_un_RULAControl / 2;
                 }
                 else
-                  gl_un_RULAControl -= nDelta;
+                  gl_un_RULAControl -= gl_nDelta;
 
               }
               if( gl_lnMeanImps < ( flashParamAmplitudeCode << 4)) {
 
-                //gl_un_RULAControl += nDelta;
+                //gl_un_RULAControl += gl_nDelta;
 
-                if( gl_un_RULAControl + nDelta > RULA_MAX) {
+                if( gl_un_RULAControl + gl_nDelta > RULA_MAX) {
                   //delta = 255 - cRULAControl;
                   gl_un_RULAControl = ( RULA_MAX + gl_un_RULAControl) / 2;
                 }
                 else
-                  gl_un_RULAControl += nDelta;
+                  gl_un_RULAControl += gl_nDelta;
 
               }
             }
@@ -2128,9 +2252,9 @@ void main() {
             if( gl_un_RULAControl < RULA_MIN) gl_un_RULAControl = RULA_MIN;
 
             //сокращение амплитуды "встряски" (если она еще > 1)
-            nDelta = nDelta >> 1;
-            if( nDelta < 1) {
-              nDelta = 1;
+            gl_nDelta = gl_nDelta >> 1;
+            if( gl_nDelta < 1) {
+              gl_nDelta = 1;
             }
 
             /*
@@ -2138,7 +2262,7 @@ void main() {
             if( gl_nT2StartDataOut) {
               if( ( T2LD + gl_nT2StartDataOut - T2VAL) % T2LD >= 32768 * 7) {
                 /*
-                nDelta = ( RULA_MAX - RULA_MIN) / 4;
+                gl_nDelta = ( RULA_MAX - RULA_MIN) / 4;
                 gl_snMeaningCounterRound = MEANING_IMP_PERIOD_100;
                 */
                 /*
@@ -2152,32 +2276,32 @@ void main() {
             //2014.10.09 - добавил что если большая разница - подстроим и приращением
             
             if( gl_nActiveRegulationT2 != 0) {
-              if( nDelta < 10) {
+              if( gl_nDelta < 10) {
                 //активная регулировка амплитуды
-                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ nDelta = 200; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { nDelta = 100; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { nDelta = 50;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { nDelta = 25;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { nDelta = 12;  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {               gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {               gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {               gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else                                                                 {               gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 200; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 100; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 50;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 25;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 12;  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else                                                                 {                  gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
               }
             }
             else {
               //регулировка амплитуды в процессе работы прибора
-              if( nDelta == 1) {
+              if( gl_nDelta == 1) {
 
-                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ nDelta = 64; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { nDelta = 32; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { nDelta = 16; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { nDelta = 8;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { nDelta = 4;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {              gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else                                                                 {              gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+                if(      abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 64; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 32; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 16; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 8;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 4;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else if( abs( ( flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                else                                                                 {                 gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
               }
             }
           }
@@ -2233,10 +2357,61 @@ void main() {
 
         }
 
-        //ПРИМЕМНИЕ КАЛИБРОВКИ ФАЗОВОГО СДВИГА
-        if( gl_cPhaseShiftCalibrated == 1) {
-          /*if( gl_dbl_Utd1) {
-          }*/
+        //ПРИМЕНЕНИЕ КАЛИБРОВКИ ФАЗОВОГО СДВИГА
+        if( gl_cFlashParamPhaseShiftUsage == 0) {
+          /*
+          if( gl_lSecondsFromStart >= gl_lCalibratedPhaseShiftApplySecs) {
+            gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
+
+            сNewPhaseShift = gl_paс_calib_phsh_phsh[0];
+            for( i=1; i<11; i++) {
+              if( gl_paс_calib_phsh_t[i] == 0xFF) break;
+              if( gl_dbl_Tutd1 > gl_paс_calib_t[i]) сNewPhaseShift = gl_paс_calib_phsh_phsh[i];
+            }
+
+            if( cNewPhaseShift != сCurrentPhaseShift) {
+              //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
+              GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
+
+              GP1DAT |= 1 << (24 + 5);      //Конфигурация линии BIT_00 (p1.5) в качестве выхода
+              GP0DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_01 (p0.7) в качестве выхода
+              GP0DAT |= 1 << (24 + 1);      //Конфигурация линии BIT_02 (p0.1) в качестве выхода
+              GP2DAT |= 1 << (24 + 3);      //Конфигурация линии BIT_03 (p2.3) в качестве выхода
+              GP4DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_04 (p4.6) в качестве выхода
+              GP4DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_05 (p4.7) в качестве выхода
+              GP0DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_06 (p0.6) в качестве выхода
+              GP0DAT |= 1 << (24 + 2);      //Конфигурация линии BIT_07 (p0.2) в качестве выхода
+
+              //выставляем значение фазового сдвига
+              ( cNewPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
+              ( cNewPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
+              ( cNewPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
+              ( cNewPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
+              ( cNewPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
+              ( cNewPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
+              ( cNewPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
+              ( cNewPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
+
+              GP2SET = 1 << (16 + 6);       //включаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+              for( i=0; i<100; i++);        // пауза
+              GP2CLR = 1 << (16 + 6);       // снимаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+
+              GP1DAT &= ~( 1 << (24 + 5));  //Конфигурация линии BIT_00 (p1.5) в качестве входа
+              GP0DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_01 (p0.7) в качестве входа
+              GP0DAT &= ~( 1 << (24 + 1));  //Конфигурация линии BIT_02 (p0.1) в качестве входа
+              GP2DAT &= ~( 1 << (24 + 3));  //Конфигурация линии BIT_03 (p2.3) в качестве входа
+              GP4DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_04 (p4.6) в качестве входа
+              GP4DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_05 (p4.7) в качестве входа
+              GP0DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_06 (p0.6) в качестве входа
+              GP0DAT &= ~( 1 << (24 + 2));  //Конфигурация линии BIT_07 (p0.2) в качестве входа
+
+              GP3DAT |= 1 << (16 + 4);    //SET_PS_SH_LINE  (p3.4) = 1
+            }
+
+            //переключаем направление передачи данных по шине к микроконтроллеру от альтеры (pin38 -> 1)
+            GP3DAT |=    1 << (16 + 4);   //SET_PS_SH_LINE  (p3.4) = 1
+
+          */
         }
 
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали

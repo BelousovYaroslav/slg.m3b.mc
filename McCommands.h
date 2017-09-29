@@ -21,6 +21,10 @@
 #define MC_COMMAND_ACT_UNLOCK_DEVICE          45    //45 = 0x2D = "-"
 
 #define MC_COMMAND_SWITCH_TO_MAX_RATE_DNDU    46    //46 = 0x2E = "."
+
+#define MC_COMMAND_ACT_RESET_PHSH_CALIB       47    //47 = 0x2F = "/"
+#define MC_COMMAND_ACT_RESET_DC_CALIB         48    //48 = 0x30 = "0"
+
 /*
 //********************* GROUP1
 //MAIN PARAMETERS. CHANGES OFTEN
