@@ -16,9 +16,9 @@ extern unsigned short flashParamStartMode;          //стартовая мода системы рег
 extern unsigned short flashParamDecCoeff;           //коэффициент вычета
 extern unsigned short flashLockDev;                 //флаг блокировки устройства
 
-extern unsigned short flashParamI1min;              //контрольное значение тока поджига I1
-extern unsigned short flashParamI2min;              //контрольное значение тока поджига I2
-extern unsigned short flashParamAmplAngMin1;        //контрольное значение для определения раскачки по сигналу с ДУСа
+extern unsigned short gl_ush_flashParamI1min;       //контрольное значение тока поджига I1
+extern unsigned short gl_ush_flashParamI2min;       //контрольное значение тока поджига I2
+extern unsigned short gl_ush_flashParamAmplAngMin1; //контрольное значение для определения раскачки по сигналу с ДУСа
 //extern unsigned short flashParamHvApplyCount;     //количество попыток применения 3kV при поджиге в пачке
 //extern unsigned short flashParamHvApplyDurat;     //Длительность попыток применения 3kV при поджиге [мсек]
 //extern unsigned short flashParamHvApplyPacks;     //Количество пачек попыток поджига
@@ -38,8 +38,8 @@ extern unsigned short gl_ushFlashParamLastRULM;
 extern unsigned short gl_aushListOutputAddParams[];
 
 //калибровка термодатчиков
-extern signed short flashParam_calibT1;
-extern unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
+extern signed short gl_ssh_flashParam_calibT1;
+extern unsigned short gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD3_val;
 extern signed short flashParam_calibT2;
 extern unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
 extern short gl_shFlashParamTCalibUsage;          //флаг использования калбировки термодатчиков: 0 - используется, REST (предпочитаю 0xFF) - не используется
@@ -91,15 +91,15 @@ void load_params_p1( void) {
 
 void load_params_p2( void) {
   //минимальный ток I1
-  if( flashEE_load_short( ADDR_CONTROL_I1, &flashParamI1min)) {
+  if( flashEE_load_short( ADDR_CONTROL_I1, &gl_ush_flashParamI1min)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //минимальный ток I2
-  if( flashEE_load_short( ADDR_CONTROL_I2, &flashParamI2min)) {
+  if( flashEE_load_short( ADDR_CONTROL_I2, &gl_ush_flashParamI2min)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //минимальный AmplAng
-  if( flashEE_load_short( ADDR_CONTROL_AA, &flashParamAmplAngMin1)) {
+  if( flashEE_load_short( ADDR_CONTROL_AA, &gl_ush_flashParamAmplAngMin1)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
 
@@ -120,9 +120,9 @@ void load_params_p2( void) {
 
 #ifdef DEBUG
   printf("DBG:load_params_p2()\n");
-  printf("DBG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);                 //минимальный ток I1
-  printf("DBG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);                 //минимальный ток I2
-  printf("DBG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1);     //минимальный AmplAng
+  printf("DBG:   Control I1:     0x%04x (%04d)\n", gl_ush_flashParamI1min, gl_ush_flashParamI1min);             //минимальный ток I1
+  printf("DBG:   Control I2:     0x%04x (%04d)\n", gl_ush_flashParamI2min, gl_ush_flashParamI2min);             //минимальный ток I2
+  printf("DBG:   Control AA:     0x%04x (%04d)\n", gl_ush_flashParamAmplAngMin1, gl_ush_flashParamAmplAngMin1); //минимальный AmplAng
   //printf("DBG:   HV_count:       0x%04x (%04d)\n", flashParamHvApplyCount, flashParamHvApplyCount);   //HV_applies tries amount in pack
   //printf("DBG:   HV_duration:    0x%04x (%04d)\n", flashParamHvApplyDurat, flashParamHvApplyDurat);   //HV_applies tries duration
   //printf("DBG:   HV_packs:       0x%04x (%04d)\n", flashParamHvApplyPacks, flashParamHvApplyPacks);   //HV_applies tries packs
@@ -212,19 +212,19 @@ void load_params_p4( void) {
 
   //ТЕМПЕРАТУРНАЯ КАЛИБРОВКА
     //Температура минимальной точки калибровки
-  if( flashEE_load_short( ADDR_TCALIB_T1, ( unsigned short *) &flashParam_calibT1)) {
+  if( flashEE_load_short( ADDR_TCALIB_T1, ( unsigned short *) &gl_ssh_flashParam_calibT1)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //Отсчёты первого термодатчика при минимальной температуре калибровки
-  if( flashEE_load_short( ADDR_TCALIB_T1_TD1, &flashParamT1_TD1_val)) {
+  if( flashEE_load_short( ADDR_TCALIB_T1_TD1, &gl_ush_flashParamT1_TD1_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //Отсчёты второго термодатчика при минимальной температуре калибровки
-  if( flashEE_load_short( ADDR_TCALIB_T1_TD2, &flashParamT1_TD2_val)) {
+  if( flashEE_load_short( ADDR_TCALIB_T1_TD2, &gl_ush_flashParamT1_TD2_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //Отсчёты третьего термодатчика при минимальной температуре калибровки
-  if( flashEE_load_short( ADDR_TCALIB_T1_TD3, &flashParamT1_TD3_val)) {
+  if( flashEE_load_short( ADDR_TCALIB_T1_TD3, &gl_ush_flashParamT1_TD3_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //Температура максимальной точки калибровки
@@ -324,10 +324,10 @@ void load_params_p4( void) {
     printf("DBG:  ADDR_LIST_PARAM%d:    0x%04x (%04d)\n",   i+1, gl_aushListOutputAddParams[i], gl_aushListOutputAddParams[i]);
   }
 
-  printf("DBG:   T-Calibration T1=0x%04x (%04d)\n", flashParam_calibT1, flashParam_calibT1);      //Температурная калибровка: температура нижней точки
-  printf("DBG:   T1_TD1:          0x%04x (%04d)\n", flashParamT1_TD1_val, flashParamT1_TD1_val);  //Температурная калибровка: показания термодатчика TD1 в нижней температурной точке
-  printf("DBG:   T1_TD2:          0x%04x (%04d)\n", flashParamT1_TD2_val, flashParamT1_TD2_val);  //Температурная калибровка: показания термодатчика TD2 в нижней температурной точке
-  printf("DBG:   T1_TD3:          0x%04x (%04d)\n", flashParamT1_TD3_val, flashParamT1_TD3_val);  //Температурная калибровка: показания термодатчика TD3 в нижней температурной точке
+  printf("DBG:   T-Calibration T1=0x%04x (%04d)\n", gl_ssh_flashParam_calibT1, gl_ssh_flashParam_calibT1);      //Температурная калибровка: температура нижней точки
+  printf("DBG:   T1_TD1:          0x%04x (%04d)\n", gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD1_val);  //Температурная калибровка: показания термодатчика TD1 в нижней температурной точке
+  printf("DBG:   T1_TD2:          0x%04x (%04d)\n", gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD2_val);  //Температурная калибровка: показания термодатчика TD2 в нижней температурной точке
+  printf("DBG:   T1_TD3:          0x%04x (%04d)\n", gl_ush_flashParamT1_TD3_val, gl_ush_flashParamT1_TD3_val);  //Температурная калибровка: показания термодатчика TD3 в нижней температурной точке
   printf("DBG:   T-Calibration T2=0x%04x (%04d)\n", flashParam_calibT2, flashParam_calibT2);      //Температурная калибровка: температура верхней точки
   printf("DBG:   T1_TD1:          0x%04x (%04d)\n", flashParamT2_TD1_val, flashParamT2_TD1_val);  //Температурная калибровка: показания термодатчика TD1 в верхней температурной точке
   printf("DBG:   T1_TD2:          0x%04x (%04d)\n", flashParamT2_TD2_val, flashParamT2_TD2_val);  //Температурная калибровка: показания термодатчика TD2 в верхней температурной точке
@@ -397,18 +397,18 @@ void check_params_p1( void) {
 void check_params_p2( void) {
   //контрольный ток поджига I1 [0-0.750 mA] = значения параметра [ 0 - 65534]
   //default значение 0.4 mA
-  if( flashParamI1min == 0xffff)
-    flashParamI1min = ( short) ( 65535. * 0.4 / 0.75);
+  if( gl_ush_flashParamI1min == 0xffff)
+    gl_ush_flashParamI1min = ( short) ( 65535. * 0.4 / 0.75);
 
   //контрольный ток поджига I2 [0-0.750 mA] = значения параметра [ 0 - 65534]
   //default значение 0.4 mA
-  if( flashParamI2min == 0xffff)
-    flashParamI2min = ( short) ( 65535. * 0.4 / 0.75);
+  if( gl_ush_flashParamI2min == 0xffff)
+    gl_ush_flashParamI2min = ( short) ( 65535. * 0.4 / 0.75);
 
   //контрольное значение раскачки - амплитуда ДУПа (0-3В) = значения параметра [ 0 - 65534]
   //default значение 1.0В
-  if( flashParamAmplAngMin1 == 0xffff)
-    flashParamAmplAngMin1 = ( int) ( 1.0 / 3. * 65535.);
+  if( gl_ush_flashParamAmplAngMin1 == 0xffff)
+    gl_ush_flashParamAmplAngMin1 = ( int) ( 1.0 / 3. * 65535.);
 
   /*
   //количество попыток применения 3kV при поджиге ( 1 - 20)
@@ -432,9 +432,9 @@ void check_params_p2( void) {
 
 #ifdef DEBUG
   printf("DBG: check_params_p2(): params checked for the range. Here they are:\n");
-  printf("DBG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);                 //минимальный ток I1
-  printf("DBG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);                 //минимальный ток I2
-  printf("DBG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1);     //минимальный AmplAng
+  printf("DBG:   Control I1:     0x%04x (%04d)\n", gl_ush_flashParamI1min, gl_ush_flashParamI1min);               //минимальный ток I1
+  printf("DBG:   Control I2:     0x%04x (%04d)\n", gl_ush_flashParamI2min, gl_ush_flashParamI2min);               //минимальный ток I2
+  printf("DBG:   Control AA:     0x%04x (%04d)\n", gl_ush_flashParamAmplAngMin1, gl_ush_flashParamAmplAngMin1);   //минимальный AmplAng
   //printf("DBG:   HV_count:       0x%04x (%04d)\n", flashParamHvApplyCount, flashParamHvApplyCount);   //HV_applies tries amount
   //printf("DBG:   HV_duration:    0x%04x (%04d)\n", flashParamHvApplyDurat, flashParamHvApplyDurat);   //HV_applies tries duration
   //printf("DBG:   HV_packs:       0x%04x (%04d)\n", flashParamHvApplyPacks, flashParamHvApplyPacks);   //HV_applies tries packs
@@ -514,12 +514,12 @@ void check_params_p4( void) {
   }
 
   //ТЕМПЕРАТУРНАЯ КАЛИБРОВКА
-  if( flashParam_calibT1 < ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION)  ||
-      flashParam_calibT1 > ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
-    flashParam_calibT1 = 0;
-    flashParamT1_TD1_val = 0;
-    flashParamT1_TD2_val = 1;
-    flashParamT1_TD3_val = 2;
+  if( gl_ssh_flashParam_calibT1 < ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION)  ||
+      gl_ssh_flashParam_calibT1 > ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
+    gl_ssh_flashParam_calibT1 = 0;
+    gl_ush_flashParamT1_TD1_val = 0;
+    gl_ush_flashParamT1_TD2_val = 1;
+    gl_ush_flashParamT1_TD3_val = 2;
   }
 
   if( flashParam_calibT2 < ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) ||
@@ -572,10 +572,10 @@ void check_params_p4( void) {
   printf("DBG:   ADD_PARAM_LIST_12:     0x%04x (%04d)\n", gl_aushListOutputAddParams[11], gl_aushListOutputAddParams[11]); //список выдаваемых аналоговых (доп. параметров)
 
   printf("DBG: Temperature calibration parameters:\n");
-  printf("DBG:   flashParam_calibT1:     0x%04x (%04d)\n", flashParam_calibT1, flashParam_calibT1);
-  printf("DBG:   flashParam_calibT1_TD1: 0x%04x (%04d)\n", flashParamT1_TD1_val, flashParamT1_TD1_val);
-  printf("DBG:   flashParam_calibT1_TD2: 0x%04x (%04d)\n", flashParamT1_TD2_val, flashParamT1_TD2_val);
-  printf("DBG:   flashParam_calibT1_TD3: 0x%04x (%04d)\n", flashParamT1_TD3_val, flashParamT1_TD3_val);
+  printf("DBG:   flashParam_calibT1:     0x%04x (%04d)\n", gl_ssh_flashParam_calibT1, gl_ssh_flashParam_calibT1);
+  printf("DBG:   flashParam_calibT1_TD1: 0x%04x (%04d)\n", gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD1_val);
+  printf("DBG:   flashParam_calibT1_TD2: 0x%04x (%04d)\n", gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD2_val);
+  printf("DBG:   flashParam_calibT1_TD3: 0x%04x (%04d)\n", gl_ush_flashParamT1_TD3_val, gl_ush_flashParamT1_TD3_val);
   printf("DBG:   flashParam_calibT2:     0x%04x (%04d)\n", flashParam_calibT2, flashParam_calibT2);
   printf("DBG:   flashParam_calibT2_TD1: 0x%04x (%04d)\n", flashParamT2_TD1_val, flashParamT2_TD1_val);
   printf("DBG:   flashParam_calibT2_TD2: 0x%04x (%04d)\n", flashParamT2_TD2_val, flashParamT2_TD2_val);
@@ -663,9 +663,9 @@ void save_params_p1( void) {
 void save_params_p2( void) {
 #ifdef DEBUG
   printf("DBG: save_params_p2(): params to be saved are:\n");
-  printf("DBG:   Control I1:     0x%04x (%04d)\n", flashParamI1min, flashParamI1min);                 //минимальный ток I1
-  printf("DBG:   Control I2:     0x%04x (%04d)\n", flashParamI2min, flashParamI2min);                 //минимальный ток I2
-  printf("DBG:   Control AA:     0x%04x (%04d)\n", flashParamAmplAngMin1, flashParamAmplAngMin1);     //минимальный AmplAng
+  printf("DBG:   Control I1:     0x%04x (%04d)\n", gl_ush_flashParamI1min, gl_ush_flashParamI1min);               //минимальный ток I1
+  printf("DBG:   Control I2:     0x%04x (%04d)\n", gl_ush_flashParamI2min, gl_ush_flashParamI2min);               //минимальный ток I2
+  printf("DBG:   Control AA:     0x%04x (%04d)\n", gl_ush_flashParamAmplAngMin1, gl_ush_flashParamAmplAngMin1);   //минимальный AmplAng
   //printf("DBG:   HV_count:       0x%04x (%04d)\n", flashParamHvApplyCount, flashParamHvApplyCount);   //HV_applies tries amount
   //printf("DBG:   HV_duration:    0x%04x (%04d)\n", flashParamHvApplyDurat, flashParamHvApplyDurat);   //HV_applies tries duration
   //printf("DBG:   HV_packs:       0x%04x (%04d)\n", flashParamHvApplyPacks, flashParamHvApplyPacks);   //HV_applies tries packs
@@ -676,15 +676,15 @@ void save_params_p2( void) {
     return;
   }
 
-  if( flashEE_save_short( ADDR_CONTROL_I1, flashParamI1min)) {
+  if( flashEE_save_short( ADDR_CONTROL_I1, gl_ush_flashParamI1min)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_CONTROL_I2, flashParamI2min)) {
+  if( flashEE_save_short( ADDR_CONTROL_I2, gl_ush_flashParamI2min)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_CONTROL_AA, flashParamAmplAngMin1)) {
+  if( flashEE_save_short( ADDR_CONTROL_AA, gl_ush_flashParamAmplAngMin1)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
@@ -748,6 +748,7 @@ void save_params_p3( void) {
 
 void save_params_p4( void) {
   int i;
+  unsigned short ush_tmp;
 
 #ifdef DEBUG
   printf("DBG: save_params_p4(): params to be saved are:\n");
@@ -778,19 +779,19 @@ void save_params_p4( void) {
   }
 
   //ТЕМПЕРАТУРНАЯ КАЛИБРОВКА
-  if( flashEE_save_short( ADDR_TCALIB_T1, flashParam_calibT1)) {
+  if( flashEE_save_short( ADDR_TCALIB_T1, gl_ssh_flashParam_calibT1)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_TCALIB_T1_TD1, flashParamT1_TD1_val)) {
+  if( flashEE_save_short( ADDR_TCALIB_T1_TD1, gl_ush_flashParamT1_TD1_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_TCALIB_T1_TD2, flashParamT1_TD2_val)) {
+  if( flashEE_save_short( ADDR_TCALIB_T1_TD2, gl_ush_flashParamT1_TD2_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_TCALIB_T1_TD3, flashParamT1_TD3_val)) {
+  if( flashEE_save_short( ADDR_TCALIB_T1_TD3, gl_ush_flashParamT1_TD3_val)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
@@ -817,16 +818,19 @@ void save_params_p4( void) {
 
   //КАЛИБРОВКА ФАЗОВОГО СДВИГА
   for( i=0; i<11; i++) {
-    if( flashEE_save_short( ADDR_PHSH_CALIB_T1 + i * 2, ( unsigned short) gl_ac_calib_phsh_t[ i])) {
+    ush_tmp = gl_ac_calib_phsh_t[ i] & 0xFF;
+    if( flashEE_save_short( ADDR_PHSH_CALIB_T1 + i * 4, ush_tmp)) {
       gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
       return;
     }
 
-    if( flashEE_save_short( ADDR_PHSH_CALIB_PHSH1 + i * 2, ( unsigned short) gl_ac_calib_phsh_phsh[ i])) {
+    ush_tmp = gl_ac_calib_phsh_phsh[ i] & 0xFF;
+    if( flashEE_save_short( ADDR_PHSH_CALIB_PHSH1 + i * 4, ush_tmp)) {
       gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
       return;
     }
   }
+
   if( flashEE_save_short( ADDR_PHSH_CALIB_USAGE, ( unsigned short) gl_cFlashParamPhaseShiftUsage)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;

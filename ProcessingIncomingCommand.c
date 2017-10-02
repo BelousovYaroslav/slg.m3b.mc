@@ -9,7 +9,7 @@
 
 //Буфер входящих команд
 extern char gl_acInputBuffer[];                     //буфер входящих команд
-extern char pos_in_in_buf;                          //позиция записи в буфере входящих команд
+extern char gl_cPos_in_in_buf;                      //позиция записи в буфере входящих команд
 
 //ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
 extern unsigned short flashParamAmplitudeCode;      //амплитуда колебаний виброподвеса
@@ -19,9 +19,9 @@ extern unsigned short flashParamStartMode;          //начальная мода Системы Рег
 extern unsigned short flashParamDecCoeff;           //коэффициент вычета
 extern unsigned short flashLockDev;                 //флаг блокировки устройства
 
-extern unsigned short flashParamI1min;              //контрольное значение тока поджига I1
-extern unsigned short flashParamI2min;              //контрольное значение тока поджига I2
-extern unsigned short flashParamAmplAngMin1;        //контрольное значение сигнала раскачки с ДУСа
+extern unsigned short gl_ush_flashParamI1min;       //контрольное значение тока поджига I1
+extern unsigned short gl_ush_flashParamI2min;       //контрольное значение тока поджига I2
+extern unsigned short gl_ush_flashParamAmplAngMin1; //контрольное значение сигнала раскачки с ДУСа
 
 extern unsigned short flashParamSignCoeff;          //знаковый коэффициент
 extern unsigned short flashParamDeviceId;             //ID устройства
@@ -31,8 +31,8 @@ extern unsigned short flashParamDateDay;            //дата ? прибора.день
 extern char flashParamOrg[];                        //название организации
 
 //калибровка термодатчиков
-extern signed short flashParam_calibT1;
-extern unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
+extern signed short gl_ssh_flashParam_calibT1;
+extern unsigned short gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD3_val;
 extern signed short flashParam_calibT2;
 extern unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
 extern char gl_bTDCalibrated;
@@ -92,20 +92,21 @@ extern unsigned short gl_aushListOutputAddParams[];
 
 void processIncomingCommand( void) {
   short in_param_temp;
-  int i;
+  int i, j;
+  char c_t, c_phsh;
 
   //**********************************************************************
   // Обработка буфера входящих команд
   //**********************************************************************
 #ifdef DEBUG
-  if( pos_in_in_buf > 0) {
-    //printf("DBG: PIC: in with %d\n", pos_in_in_buf);
+  if( gl_cPos_in_in_buf > 0) {
+    //printf("DBG: PIC: in with %d\n", gl_cPos_in_in_buf);
     putchar_nocheck( '0');
-    putchar_nocheck( '0' + pos_in_in_buf);
+    putchar_nocheck( '0' + gl_cPos_in_in_buf);
   }
 #endif
 
-  if( pos_in_in_buf == IN_COMMAND_BUF_LEN) {
+  if( gl_cPos_in_in_buf == IN_COMMAND_BUF_LEN) {
 
 #ifdef DEBUG
     putchar_nocheck( '1');
@@ -136,7 +137,7 @@ void processIncomingCommand( void) {
 #endif
         break;
       }
-      pos_in_in_buf = 0;
+      gl_cPos_in_in_buf = 0;
       return;
     }
 
@@ -209,17 +210,17 @@ void processIncomingCommand( void) {
           break;
 
           case CONTROL_I1:  //Set control_i1
-            flashParamI1min = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamI1min = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = CONTROL_I1;
           break;
 
           case CONTROL_I2:  //Set control_i2
-            flashParamI2min = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamI2min = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = CONTROL_I2;
           break;
 
           case CONTROL_AA:  //Set control_aa
-            flashParamAmplAngMin1 = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamAmplAngMin1 = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = CONTROL_AA;
           break;
 
@@ -308,13 +309,32 @@ void processIncomingCommand( void) {
 
           case PH_SH_CALIB_T:     //Калибровка фазового сдвига. Точка N. Температура            0x39  "9"
             gl_ac_calib_phsh_t[ gl_acInputBuffer[2]] = gl_acInputBuffer[3];
+            gl_cFlashParamPhaseShiftUsage = 0xFF;
           break;
 
           case PH_SH_CALIB_PH_SH: //Калибровка фазового сдвига. Точка N. Соотв. фазовый сдвиг   0x3A  ":"
             gl_ac_calib_phsh_phsh[ gl_acInputBuffer[2]] = gl_acInputBuffer[3];
+            gl_cFlashParamPhaseShiftUsage = 0xFF;
           break;
 
           case PH_SH_USAGE:       //Калибровка фазового сдвига. Использование                   0x3D  "="
+            if( gl_acInputBuffer[2] == 0x00) {
+              for( i=0; i<10; i++) {
+                for( j=0; j<10; j++) {
+
+                  if( gl_ac_calib_phsh_t[ j] > gl_ac_calib_phsh_t[ j + 1]) {
+                    c_t = gl_ac_calib_phsh_t[ j + 1];
+                    gl_ac_calib_phsh_t[ j + 1] = gl_ac_calib_phsh_t[ j];
+                    gl_ac_calib_phsh_t[ j] = c_t;
+
+                    c_phsh = gl_ac_calib_phsh_phsh[ j + 1];
+                    gl_ac_calib_phsh_phsh[ j + 1] = gl_ac_calib_phsh_phsh[ j];
+                    gl_ac_calib_phsh_phsh[ j] = c_phsh;
+                  }
+                }
+              }
+            }
+
             for( i=0; i<11; i++) {
               if( gl_ac_calib_phsh_t[i] != 0xFF && gl_ac_calib_phsh_phsh[i] != 0xFF) {
                 gl_cFlashParamPhaseShiftUsage = gl_acInputBuffer[2];
@@ -390,11 +410,10 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = PH_SH_USAGE;
           break;
 
-          /*
           case PH_SH_CURRENT_VAL: //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
             gl_nSentAddParamIndex = PH_SH_CURRENT_VAL;
           break;
-          */
+
         }
       break;
 
@@ -410,12 +429,12 @@ void processIncomingCommand( void) {
       case MC_COMMAND_ACT_T_CALIBRATION: //Thermo calibration (parameter here is current temperature)
         gl_bTDCalibrated = 0;
         in_param_temp  = gl_acInputBuffer[1] + ( ( ( short) gl_acInputBuffer[2]) << 8);
-        if( flashParam_calibT1 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) && 
-            flashParam_calibT1 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
+        if( gl_ssh_flashParam_calibT1 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) && 
+            gl_ssh_flashParam_calibT1 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
             //у нас есть нормальная минимальная точка калибровки
 
             //затычка на то, чтобы не давали мин точку равной макс
-            if( in_param_temp == flashParam_calibT1) {
+            if( in_param_temp == gl_ssh_flashParam_calibT1) {
               gl_nSentAddParamIndex = CALIB_T1;
               break;
             }
@@ -424,10 +443,10 @@ void processIncomingCommand( void) {
               flashParam_calibT2 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
               //у нас есть нормальные минимальная и максимальная точка калибровки
               //определим какую надо заменить
-              if( in_param_temp < flashParam_calibT1) {
+              if( in_param_temp < gl_ssh_flashParam_calibT1) {
                 //надо заменить минимальную
                 gl_cCalibProcessState = 1;
-                flashParam_calibT1 = in_param_temp;
+                gl_ssh_flashParam_calibT1 = in_param_temp;
               }
               else {
                 //надо заменить максимальную
@@ -444,17 +463,17 @@ void processIncomingCommand( void) {
         }
         else {
           //у нас нет даже минимальной точки!! значит это будет минимальная :)
-          flashParam_calibT1 = in_param_temp;
+          gl_ssh_flashParam_calibT1 = in_param_temp;
           gl_cCalibProcessState = 1;
         }
       break;
 
       case MC_COMMAND_ACT_RESET_T_CALIB:    //Reset thermo calibration data
         gl_bTDCalibrated = 0;
-        flashParam_calibT1 = 0;
-        flashParamT1_TD1_val = 0;
-        flashParamT1_TD2_val = 0;
-        flashParamT1_TD3_val = 0;
+        gl_ssh_flashParam_calibT1 = 0;
+        gl_ush_flashParamT1_TD1_val = 0;
+        gl_ush_flashParamT1_TD2_val = 0;
+        gl_ush_flashParamT1_TD3_val = 0;
 
         flashParam_calibT2 = 0;
         flashParamT2_TD1_val = 1;
@@ -549,7 +568,7 @@ void processIncomingCommand( void) {
       break;
     }
 
-    if( pos_in_in_buf != 0) {
+    if( gl_cPos_in_in_buf != 0) {
 
 #ifdef DEBUG
       putchar_nocheck( '4');
@@ -557,13 +576,13 @@ void processIncomingCommand( void) {
 #endif
 
       for( i=0; i<6; gl_acInputBuffer[ i++] = 0);
-      pos_in_in_buf = 0;
+      gl_cPos_in_in_buf = 0;
     }
   }
 
 
 
-  //pos_in_in_buf = 0;
+  //gl_cPos_in_in_buf = 0;
 
 //#ifdef DEBUG
   //printf("DBG: PIC: out\n");

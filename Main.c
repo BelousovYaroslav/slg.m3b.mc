@@ -57,7 +57,7 @@ char gl_c_EmergencyCode = 0;            //код ошибки
 
 //Буфер входящих команд
 char gl_acInputBuffer[6] = { 0, 0, 0, 0, 0, 0};     //буфер входящих команд
-char pos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
+char gl_cPos_in_in_buf = 0;                         //позиция записи в буфере входящих команд
 
 int gl_n3kVapplies = 0;                 //число 3kV импульсов при поджиге
 
@@ -114,9 +114,9 @@ unsigned short flashParamStartMode = 5;           //начальная мода Системы Регул
 unsigned short flashParamDecCoeff = 0;            //коэффициент вычета
 unsigned short flashLockDev = 0;                  //флаг блокировки устройства
 
-unsigned short flashParamI1min = 0;               //контрольное значение тока поджига I1
-unsigned short flashParamI2min = 0;               //контрольное значение тока поджига I2
-unsigned short flashParamAmplAngMin1 = 0;         //контрольное значение сигнала раскачки с ДУСа
+unsigned short gl_ush_flashParamI1min = 0;        //контрольное значение тока поджига I1
+unsigned short gl_ush_flashParamI2min = 0;        //контрольное значение тока поджига I2
+unsigned short gl_ush_flashParamAmplAngMin1 = 0;  //контрольное значение сигнала раскачки с ДУСа
 
 unsigned short flashParamSignCoeff = 2;           //знаковый коэффициент
 unsigned short flashParamDeviceId = 0;            //ID устройства
@@ -135,8 +135,8 @@ unsigned short gl_aushListOutputAddParams[12];
 int nSentPackListIndex;
 
 //калибровка термодатчиков
-signed short flashParam_calibT1;
-unsigned short flashParamT1_TD1_val, flashParamT1_TD2_val, flashParamT1_TD3_val;
+signed short gl_ssh_flashParam_calibT1;
+unsigned short gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD3_val;
 signed short flashParam_calibT2;
 unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
 short gl_shFlashParamTCalibUsage;         //флаг использования калбировки термодатчиков: 0 - используется, REST (предпочитаю 0xFF) - не используется
@@ -149,8 +149,9 @@ char gl_cCurrentPhaseShift;         //текущий (последний применённый) фазовый сд
 
 char gl_cCalibProcessState;
 char gl_bTDCalibrated;
-double TD1_K, TD1_B;
-double TD2_K, TD2_B;
+double gl_dblTD1_K, gl_dblTD1_B;
+double gl_dblTD2_K, gl_dblTD2_B;
+double gl_dblTD3_K, gl_dblTD3_B;
 
 //Переменные участвующие в работе системы регулировки амплитуды
 int gl_snMeaningCounter = 0;              //счётчик средних
@@ -191,8 +192,8 @@ void FIQ_Handler (void) __fiq
 {
   char tmp;
   if( ( FIQSTA & UART_BIT) != 0) {
-    if( pos_in_in_buf < IN_COMMAND_BUF_LEN)
-      gl_acInputBuffer[ pos_in_in_buf++] = COMRX;
+    if( gl_cPos_in_in_buf < IN_COMMAND_BUF_LEN)
+      gl_acInputBuffer[ gl_cPos_in_in_buf++] = COMRX;
     else
       tmp = COMRX;
     //GP0DAT = ( 1 << 16);
@@ -727,28 +728,34 @@ void ThermoCalibrationCalculation( void)
 {
   double x1, y1, x2, y2;
   //рассчёт калибровки термодатчиков
-  if( flashParam_calibT1 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) && 
-      flashParam_calibT1 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION) &&
+  if( gl_ssh_flashParam_calibT1 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) && 
+      gl_ssh_flashParam_calibT1 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION) &&
       flashParam_calibT2 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION) &&
       flashParam_calibT2 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
 
 
-    x1 = flashParam_calibT1 - THERMO_CALIB_PARAMS_BASE;
+    x1 = gl_ssh_flashParam_calibT1 - THERMO_CALIB_PARAMS_BASE;
     x2 = flashParam_calibT2 - THERMO_CALIB_PARAMS_BASE;
 
 
-    y1 = flashParamT1_TD1_val;
+    y1 = gl_ush_flashParamT1_TD1_val;
     y2 = flashParamT2_TD1_val;
 
-    TD1_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
-    TD1_K = ( y2 - y1) / ( x2 - x1);
+    gl_dblTD1_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
+    gl_dblTD1_K = ( y2 - y1) / ( x2 - x1);
 
 
-    y1 = flashParamT1_TD2_val;
+    y1 = gl_ush_flashParamT1_TD2_val;
     y2 = flashParamT2_TD2_val;
 
-    TD2_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
-    TD2_K = ( y2 - y1) / ( x2 - x1);
+    gl_dblTD2_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
+    gl_dblTD2_K = ( y2 - y1) / ( x2 - x1);
+
+    y1 = gl_ush_flashParamT1_TD3_val;
+    y2 = flashParamT2_TD3_val;
+
+    gl_dblTD3_B = ( x2 * y1 - x1 * y2) / ( x1 - x2);
+    gl_dblTD3_K = ( y2 - y1) / ( x2 - x1);
 
     gl_bTDCalibrated = 1;
   }
@@ -993,26 +1000,9 @@ int getNextAddParamDescriptorToSendFromList() {
 }
 
 void main() {
-  //unsigned short ush_SA_check_time;
-
-  //unsigned char jchar = 0x30; 
   int time = 20000;
   int i;
   char lb, hb;
-  short sSrc = -10;
-  unsigned short unSrc = 10;
-
-  int nSrc = 10;
-  int nDst = 0;
-  float fSrc = 10.2345;
-  float fDst = 0.;
-  /*char *pntr;
-  char b1, b2, b3, b4;*/
-
-  /*short q;
-  unsigned short q1;
-  unsigned int i1;*/
-
   char bSAFake = 0;
   int prt2val;
 
@@ -1020,6 +1010,9 @@ void main() {
   double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
   float Coeff;
 
+  //переменные используемые в выставке фазового сдвига
+  double dblTdCalib;
+  char cNewPhaseShift;
 
   //по умолчанию мы НЕ ИСПОЛЬЗУЕМ фазовый сдвиг
   gl_cFlashParamPhaseShiftUsage = 0xFF;
@@ -1252,7 +1245,7 @@ void main() {
   gl_lSecondsFromStart = 0;
   gl_l5SecPrevValue = 0;
   gl_nSecondsT2Lock = T2VAL;
-  gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
+  gl_lCalibratedPhaseShiftApplySecs = 0;
 
   //**********************************************************************
   // Конфигурация и выставка ЦАП
@@ -1308,7 +1301,7 @@ void main() {
   #endif
 #else
 
-  dStartAmplAngCheck = ( double) flashParamAmplAngMin1 / 65535. * 3.;
+  dStartAmplAngCheck = ( double) gl_ush_flashParamAmplAngMin1 / 65535. * 3.;
   //dStartAmplAngCheck = 0.25;
   prt2val = T2VAL;
   ADCCP = 0x06;   //AmplAng channel
@@ -1384,22 +1377,22 @@ void main() {
     while (!( ADCSTA & 0x01)){}     // ожидаем конца преобразования АЦП
     gl_ssh_current_2 = (ADCDAT >> 16);
 
-    /*if( ( ( double) gl_ssh_current_1 / 4096. * 3. / 3.973 < ( double) flashParamI1min / 65535. * 0.75)  ||
-        ( ( double) gl_ssh_current_2 / 4096. * 3. / 3.973 < ( double) flashParamI2min / 65535. * 0.75)) {*/
+    /*if( ( ( double) gl_ssh_current_1 / 4096. * 3. / 3.973 < ( double) gl_ush_flashParamI1min / 65535. * 0.75)  ||
+        ( ( double) gl_ssh_current_2 / 4096. * 3. / 3.973 < ( double) gl_ush_flashParamI2min / 65535. * 0.75)) {*/
 
 #ifdef DEBUG
   printf("DEBUG: Laser fireup: code=0x%04x   I1=%.02f   CONTROL=%.02f\n",
             gl_ssh_current_1,
             ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5,
-            ( double) flashParamI1min / 65535. * 0.75);
+            ( double) gl_ush_flashParamI1min / 65535. * 0.75);
   printf("DEBUG: Laser fireup: code=0x%04x   I2=%.02f   CONTROL=%.02f\n",
             gl_ssh_current_2,
             ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5,
-            ( double) flashParamI2min / 65535. * 0.75);
+            ( double) gl_ush_flashParamI2min / 65535. * 0.75);
 #endif
 
-    if( ( ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5  < ( double) flashParamI1min / 65535. * 0.75)  ||
-        ( ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5 < ( double) flashParamI2min / 65535. * 0.75)) {
+    if( ( ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5 < ( double) gl_ush_flashParamI1min / 65535. * 0.75)  ||
+        ( ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5 < ( double) gl_ush_flashParamI2min / 65535. * 0.75)) {
         //не зажглось
 
         //снимаем 3kV линию (остаётся 800V)
@@ -1845,7 +1838,7 @@ void main() {
             gl_ssh_Utd3 = (ADCDAT >> 16);
             gl_ssh_Utd3_cal = gl_ssh_Utd3;
             if( gl_bTDCalibrated)
-              gl_dbl_Tutd3 = ( double) gl_ssh_Utd3 * TD1_K + TD1_B;
+              gl_dbl_Tutd3 = ( double) gl_ssh_Utd3 * gl_dblTD3_K + gl_dblTD3_B;
             else
               gl_dbl_Tutd3 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd3 / 4096. * 2.5) / 3.88e-6));
             gl_ssh_Utd3 = ( short) ( ( gl_dbl_Tutd3 + 100.) / 200. * 65535.);
@@ -1855,7 +1848,7 @@ void main() {
             gl_ssh_Utd1 = (ADCDAT >> 16);
             gl_ssh_Utd1_cal = gl_ssh_Utd1;
             if( gl_bTDCalibrated)
-              gl_dbl_Tutd1 = ( double) gl_ssh_Utd1 * TD1_K + TD1_B;
+              gl_dbl_Tutd1 = ( double) gl_ssh_Utd1 * gl_dblTD1_K + gl_dblTD1_B;
             else
               gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
             gl_ssh_Utd1 = ( short) ( ( gl_dbl_Tutd2 + 100.) / 200. * 65535.);
@@ -1865,7 +1858,7 @@ void main() {
             gl_ssh_Utd2 = (ADCDAT >> 16);
             gl_ssh_Utd2_cal = gl_ssh_Utd2;
             if( gl_bTDCalibrated)
-              gl_dbl_Tutd2 = ( double) gl_ssh_Utd2 * TD1_K + TD1_B;
+              gl_dbl_Tutd2 = ( double) gl_ssh_Utd2 * gl_dblTD2_K + gl_dblTD2_B;
             else
               gl_dbl_Tutd2 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd2 / 4096. * 2.5) / 3.88e-6));
             gl_ssh_Utd2 = ( short) ( ( gl_dbl_Tutd2 + 100.) / 200. * 65535.);
@@ -1883,7 +1876,7 @@ void main() {
             case 1:
               //калибруем первый датчик на минимальной температуре
               if( ADCChannel == 1) {
-                flashParamT1_TD1_val = gl_ssh_Utd1_cal;
+                gl_ush_flashParamT1_TD1_val = gl_ssh_Utd1_cal;
                 gl_cCalibProcessState = 2;
               }
             break;
@@ -1891,7 +1884,7 @@ void main() {
             case 2:
               //калибруем второй датчик на минимальной температуре
               if( ADCChannel == 2) {
-                flashParamT1_TD2_val = gl_ssh_Utd2_cal;
+                gl_ush_flashParamT1_TD2_val = gl_ssh_Utd2_cal;
                 gl_cCalibProcessState = 3;
               }
             break;
@@ -1899,7 +1892,7 @@ void main() {
             case 3:
               //калибруем третий датчик на минимальной температуре
               if( ADCChannel == 0) {
-                flashParamT1_TD3_val = gl_ssh_Utd3_cal;
+                gl_ush_flashParamT1_TD3_val = gl_ssh_Utd3_cal;
                 gl_cCalibProcessState = 0;
                 save_params_p4();
                 gl_nSentAddParamIndex = CALIB_T1;
@@ -2031,9 +2024,9 @@ void main() {
           case M_COEFF:         send_pack( flashParamMCoeff);         break; //Уставка коэффициента ошумления
           case STARTMODE:       send_pack( flashParamStartMode);      break; //Уставка начальной моды
           case DECCOEFF:        send_pack( flashParamDecCoeff);       break; //Коэффициент вычета
-          case CONTROL_I1:      send_pack( flashParamI1min);          break; //flashParamI1min
-          case CONTROL_I2:      send_pack( flashParamI2min);          break; //flashParamI2min
-          case CONTROL_AA:      send_pack( flashParamAmplAngMin1);    break; //flashParamAmplAngMin1
+          case CONTROL_I1:      send_pack( gl_ush_flashParamI1min);   break; //gl_ush_flashParamI1min
+          case CONTROL_I2:      send_pack( gl_ush_flashParamI2min);   break; //gl_ush_flashParamI2min
+          case CONTROL_AA:      send_pack( gl_ush_flashParamAmplAngMin1);    break; //gl_ush_flashParamAmplAngMin1
 
           /*
           case HV_APPLY_COUNT_SET: send_pack( flashParamHvApplyCount);  break; //HV apply cycles in pack
@@ -2070,10 +2063,10 @@ void main() {
 
           case VERSION:         send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE)); break; //SOFTWARE VERSION
 
-          case CALIB_T1:        send_pack( flashParam_calibT1);       break; //min thermo-calib point T
-          case T1_TD1:          send_pack( flashParamT1_TD1_val);     break; //min thermo-calib point thermo1 data
-          case T1_TD2:          send_pack( flashParamT1_TD2_val);     break; //min thermo-calib point thermo2 data
-          case T1_TD3:          send_pack( flashParamT1_TD3_val);     break; //min thermo-calib point thermo3 data
+          case CALIB_T1:        send_pack( gl_ssh_flashParam_calibT1);    break; //min thermo-calib point T
+          case T1_TD1:          send_pack( gl_ush_flashParamT1_TD1_val);  break; //min thermo-calib point thermo1 data
+          case T1_TD2:          send_pack( gl_ush_flashParamT1_TD2_val);  break; //min thermo-calib point thermo2 data
+          case T1_TD3:          send_pack( gl_ush_flashParamT1_TD3_val);  break; //min thermo-calib point thermo3 data
           case CALIB_T2:        send_pack( flashParam_calibT2);       break; //max thermo-calib point T
           case T2_TD1:          send_pack( flashParamT2_TD1_val);     break; //max thermo-calib point thermo1 data
           case T2_TD2:          send_pack( flashParamT2_TD2_val);     break; //max thermo-calib point thermo2 data
@@ -2113,8 +2106,8 @@ void main() {
         else {
           //если текущий выданный доп. параметр не из списка
           switch( gl_nSentAddParamIndex) {
-            case CONTROL_I1:      gl_nSentAddParamIndex = CONTROL_I2;     break; //flashParamI1min
-            case CONTROL_I2:      gl_nSentAddParamIndex = CONTROL_AA;     break; //flashParamI2min
+            case CONTROL_I1:      gl_nSentAddParamIndex = CONTROL_I2;     break; //gl_ush_flashParamI1min
+            case CONTROL_I2:      gl_nSentAddParamIndex = CONTROL_AA;     break; //gl_ush_flashParamI2min
 
             case ORG_B1:          gl_nSentAddParamIndex = ORG_B2;        break; //Organization.Byte1
             case ORG_B2:          gl_nSentAddParamIndex = ORG_B3;        break; //Organization.Byte2
@@ -2359,17 +2352,20 @@ void main() {
 
         //ПРИМЕНЕНИЕ КАЛИБРОВКИ ФАЗОВОГО СДВИГА
         if( gl_cFlashParamPhaseShiftUsage == 0) {
-          /*
+
           if( gl_lSecondsFromStart >= gl_lCalibratedPhaseShiftApplySecs) {
             gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
 
-            сNewPhaseShift = gl_paс_calib_phsh_phsh[0];
+            cNewPhaseShift = gl_ac_calib_phsh_phsh[0];
             for( i=1; i<11; i++) {
-              if( gl_paс_calib_phsh_t[i] == 0xFF) break;
-              if( gl_dbl_Tutd1 > gl_paс_calib_t[i]) сNewPhaseShift = gl_paс_calib_phsh_phsh[i];
+              if( gl_ac_calib_phsh_t[i] == 0xFF) break;
+              dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
+              if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
             }
 
-            if( cNewPhaseShift != сCurrentPhaseShift) {
+            if( cNewPhaseShift != gl_cCurrentPhaseShift) {
+              gl_cCurrentPhaseShift = cNewPhaseShift;
+
               //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
               GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
 
@@ -2407,11 +2403,7 @@ void main() {
 
               GP3DAT |= 1 << (16 + 4);    //SET_PS_SH_LINE  (p3.4) = 1
             }
-
-            //переключаем направление передачи данных по шине к микроконтроллеру от альтеры (pin38 -> 1)
-            GP3DAT |=    1 << (16 + 4);   //SET_PS_SH_LINE  (p3.4) = 1
-
-          */
+          }
         }
 
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали

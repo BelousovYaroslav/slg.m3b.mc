@@ -9,9 +9,9 @@ extern unsigned short flashParamAmplitudeCode;
 extern unsigned short flashParamTactCode;
 extern unsigned short flashParamMCoeff;
 extern unsigned short flashParamStartMode;
-extern unsigned short flashParamI1min;
-extern unsigned short flashParamI2min;
-extern unsigned short flashParamAmplAngMin1;
+extern unsigned short gl_ush_flashParamI1min;
+extern unsigned short gl_ush_flashParamI2min;
+extern unsigned short gl_ush_flashParamAmplAngMin1;
 extern unsigned short flashParamDecCoeff;
 extern unsigned short flashParamSignCoeff;
 extern unsigned short flashParamDeviceId;
@@ -67,9 +67,9 @@ void deadloop_no_tact( int nError) {
     gl_nSentAddParamIndex = M_COEFF;      send_pack( flashParamMCoeff);
     gl_nSentAddParamIndex = STARTMODE;    send_pack( flashParamStartMode);
     gl_nSentAddParamIndex = DECCOEFF;     send_pack( flashParamDecCoeff);
-    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( flashParamI1min);
-    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( flashParamI2min);
-    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( flashParamAmplAngMin1);
+    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( gl_ush_flashParamI1min);
+    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( gl_ush_flashParamI2min);
+    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( gl_ush_flashParamAmplAngMin1);
     gl_nSentAddParamIndex = SIGNCOEFF;    send_pack( flashParamSignCoeff);
     gl_nSentAddParamIndex = DEVNUM;       send_pack( flashParamDeviceId);
     gl_nSentAddParamIndex = DATE_Y;       send_pack( flashParamDateYear);
@@ -98,7 +98,7 @@ void deadloop_no_tact( int nError) {
 
 void deadloop_no_hangerup( void) {
   //Œ¡–¿¡Œ“ ¿ Œ“ ¿«¿ –¿— ¿◊ » ¬»¡–ŒœŒƒ¬≈—¿
-  double dStartAmplAngCheck = ( double) flashParamAmplAngMin1 / 65535. * 3.;
+  double dStartAmplAngCheck = ( double) gl_ush_flashParamAmplAngMin1 / 65535. * 3.;
 
 #ifdef DEBUG
   printf("DBG: NO HANGER VIBRATION! DEADLOOP.\n");
@@ -145,9 +145,9 @@ void deadloop_no_hangerup( void) {
     gl_nSentAddParamIndex = M_COEFF;      send_pack( flashParamMCoeff);
     gl_nSentAddParamIndex = STARTMODE;    send_pack( flashParamStartMode);
     gl_nSentAddParamIndex = DECCOEFF;     send_pack( flashParamDecCoeff);
-    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( flashParamI1min);
-    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( flashParamI2min);
-    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( flashParamAmplAngMin1);
+    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( gl_ush_flashParamI1min);
+    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( gl_ush_flashParamI2min);
+    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( gl_ush_flashParamAmplAngMin1);
     gl_nSentAddParamIndex = SIGNCOEFF;    send_pack( flashParamSignCoeff);
     gl_nSentAddParamIndex = DEVNUM;       send_pack( flashParamDeviceId);
     gl_nSentAddParamIndex = DATE_Y;       send_pack( flashParamDateYear);
@@ -191,9 +191,9 @@ void deadloop_no_firing( int nError) {
     gl_nSentAddParamIndex = TACT_CODE;  send_pack( flashParamTactCode);
     gl_nSentAddParamIndex = M_COEFF;    send_pack( flashParamMCoeff);
     gl_nSentAddParamIndex = STARTMODE;  send_pack( flashParamStartMode);
-    gl_nSentAddParamIndex = CONTROL_I1; send_pack( flashParamI1min);
-    gl_nSentAddParamIndex = CONTROL_I2; send_pack( flashParamI2min);
-    gl_nSentAddParamIndex = CONTROL_AA; send_pack( flashParamAmplAngMin1);
+    gl_nSentAddParamIndex = CONTROL_I1; send_pack( gl_ush_flashParamI1min);
+    gl_nSentAddParamIndex = CONTROL_I2; send_pack( gl_ush_flashParamI2min);
+    gl_nSentAddParamIndex = CONTROL_AA; send_pack( gl_ush_flashParamAmplAngMin1);
     gl_nSentAddParamIndex = DECCOEFF;   send_pack( flashParamDecCoeff);
     gl_nSentAddParamIndex = SIGNCOEFF;  send_pack( flashParamSignCoeff);
     gl_nSentAddParamIndex = VERSION;    send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
@@ -217,9 +217,9 @@ void deadloop_no_firing( int nError) {
     gl_nSentAddParamIndex = M_COEFF;      send_pack( flashParamMCoeff);
     gl_nSentAddParamIndex = STARTMODE;    send_pack( flashParamStartMode);
     gl_nSentAddParamIndex = DECCOEFF;     send_pack( flashParamDecCoeff);
-    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( flashParamI1min);
-    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( flashParamI2min);
-    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( flashParamAmplAngMin1);
+    gl_nSentAddParamIndex = CONTROL_I1;   send_pack( gl_ush_flashParamI1min);
+    gl_nSentAddParamIndex = CONTROL_I2;   send_pack( gl_ush_flashParamI2min);
+    gl_nSentAddParamIndex = CONTROL_AA;   send_pack( gl_ush_flashParamAmplAngMin1);
     
     gl_nSentAddParamIndex = SIGNCOEFF;    send_pack( flashParamSignCoeff);
     gl_nSentAddParamIndex = DEVNUM;       send_pack( flashParamDeviceId);
