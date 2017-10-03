@@ -12,29 +12,29 @@ extern char gl_acInputBuffer[];                     //буфер входящих команд
 extern char gl_cPos_in_in_buf;                      //позиция записи в буфере входящих команд
 
 //ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
-extern unsigned short flashParamAmplitudeCode;      //амплитуда колебаний виброподвеса
-extern unsigned short flashParamTactCode;           //код такта ошумления
-extern unsigned short flashParamMCoeff;             //коэффициент ошумления
-extern unsigned short flashParamStartMode;          //начальная мода Системы Регулировки Периметра
-extern unsigned short flashParamDecCoeff;           //коэффициент вычета
-extern unsigned short flashLockDev;                 //флаг блокировки устройства
+extern unsigned short gl_ush_flashParamAmplitudeCode;      //амплитуда колебаний виброподвеса
+extern unsigned short gl_ush_flashParamTactCode;           //код такта ошумления
+extern unsigned short gl_ush_flashParamMCoeff;             //коэффициент ошумления
+extern unsigned short gl_ush_flashParamStartMode;          //начальная мода Системы Регулировки Периметра
+extern unsigned short gl_ush_flashParamDecCoeff;           //коэффициент вычета
+extern unsigned short gl_ush_flashLockDev;                 //флаг блокировки устройства
 
 extern unsigned short gl_ush_flashParamI1min;       //контрольное значение тока поджига I1
 extern unsigned short gl_ush_flashParamI2min;       //контрольное значение тока поджига I2
 extern unsigned short gl_ush_flashParamAmplAngMin1; //контрольное значение сигнала раскачки с ДУСа
 
-extern unsigned short flashParamSignCoeff;          //знаковый коэффициент
-extern unsigned short flashParamDeviceId;             //ID устройства
-extern unsigned short flashParamDateYear;           //дата ? прибора.год
-extern unsigned short flashParamDateMonth;          //дата ? прибора.месяц
-extern unsigned short flashParamDateDay;            //дата ? прибора.день
+extern unsigned short gl_ush_flashParamSignCoeff;          //знаковый коэффициент
+extern unsigned short gl_ush_flashParamDeviceId;           //ID устройства
+extern unsigned short gl_ush_flashParamDateYear;           //дата ? прибора.год
+extern unsigned short gl_ush_flashParamDateMonth;          //дата ? прибора.месяц
+extern unsigned short gl_ush_flashParamDateDay;            //дата ? прибора.день
 extern char flashParamOrg[];                        //название организации
 
 //калибровка термодатчиков
 extern signed short gl_ssh_flashParam_calibT1;
 extern unsigned short gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD2_val, gl_ush_flashParamT1_TD3_val;
-extern signed short flashParam_calibT2;
-extern unsigned short flashParamT2_TD1_val, flashParamT2_TD2_val, flashParamT2_TD3_val;
+extern signed short gl_ssh_flashParam_calibT2;
+extern unsigned short gl_ush_flashParamT2_TD1_val, gl_ush_flashParamT2_TD2_val, gl_ush_flashParamT2_TD3_val;
 extern char gl_bTDCalibrated;
 extern char gl_cCalibProcessState;
 
@@ -123,7 +123,7 @@ void processIncomingCommand( void) {
               gl_acInputBuffer[ 2] == 0x55 &&
               gl_acInputBuffer[ 3] == 0x5A) {
                 gl_chLockBit = 0;
-                flashLockDev = 0;
+                gl_ush_flashLockDev = 0;
           }
         break;
         case MC_COMMAND_REQ:
@@ -149,7 +149,7 @@ void processIncomingCommand( void) {
       case MC_COMMAND_SET:
         switch( gl_acInputBuffer[1]) {
           case AMPLITUDE:   //Set Amplitude of Hangreup Vibration
-            flashParamAmplitudeCode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamAmplitudeCode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = AMPLITUDE;
 
             gl_snMeaningCounter = 0;
@@ -165,7 +165,7 @@ void processIncomingCommand( void) {
           break;
 
           case TACT_CODE:   //Set CodeTact
-            flashParamTactCode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamTactCode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             configure_hanger();
             gl_nSentAddParamIndex = TACT_CODE;
 
@@ -176,7 +176,7 @@ void processIncomingCommand( void) {
           break;
 
           case M_COEFF: //Set NoiseCoefficient M
-            flashParamMCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamMCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
 
             //выставляемся на ЦАП
             DACConfiguration();
@@ -188,7 +188,7 @@ void processIncomingCommand( void) {
           break;
 
           case STARTMODE: //Set StartMode
-            flashParamStartMode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamStartMode = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
 
             GP0DAT |= ( 1 << (16 + 5));   //RP_P   (p0.5) = 1
 
@@ -200,7 +200,7 @@ void processIncomingCommand( void) {
           break;
 
           case DECCOEFF: //Set decrement coeff
-            flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = DECCOEFF;
 
             //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
@@ -242,35 +242,35 @@ void processIncomingCommand( void) {
           */
 
           case SIGNCOEFF:  //Set sign coeff
-            flashParamSignCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamSignCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = SIGNCOEFF;
           break;
 
           case DEVNUM:    //Set device
-            flashParamDeviceId = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamDeviceId = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = DEVNUM;
           break;
 
           /*
           case DEVNUM_BH:  //Set device id high byte
-            flashParamDeviceId &= ( 0xFF00);
-            flashParamDeviceId &= ( ( ( short) gl_acInputBuffer[2]) << 8);
+            gl_ush_flashParamDeviceId &= ( 0xFF00);
+            gl_ush_flashParamDeviceId &= ( ( ( short) gl_acInputBuffer[2]) << 8);
             gl_nSentAddParamIndex = DEVNUM_BH;
           break;
           */
 
           case DATE_Y:    //Set Date.YEAR
-            flashParamDateYear = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            gl_ush_flashParamDateYear = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = DATE_Y;
           break;
 
           case DATE_M:    //Set Date.MONTH
-            flashParamDateMonth = gl_acInputBuffer[2];
+            gl_ush_flashParamDateMonth = gl_acInputBuffer[2];
             gl_nSentAddParamIndex = DATE_Y;
           break;
 
           case DATE_D:    //Set Date.DAY
-            flashParamDateDay = gl_acInputBuffer[2];
+            gl_ush_flashParamDateDay = gl_acInputBuffer[2];
             gl_nSentAddParamIndex = DATE_Y;
           break;
 
@@ -439,8 +439,8 @@ void processIncomingCommand( void) {
               break;
             }
 
-            if( flashParam_calibT2 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION)  &&
-              flashParam_calibT2 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
+            if( gl_ssh_flashParam_calibT2 >= ( THERMO_CALIB_PARAMS_BASE + MIN_T_THERMO_CALIBRATION)  &&
+              gl_ssh_flashParam_calibT2 <= ( THERMO_CALIB_PARAMS_BASE + MAX_T_THERMO_CALIBRATION)) {
               //у нас есть нормальные минимальная и максимальная точка калибровки
               //определим какую надо заменить
               if( in_param_temp < gl_ssh_flashParam_calibT1) {
@@ -451,13 +451,13 @@ void processIncomingCommand( void) {
               else {
                 //надо заменить максимальную
                 gl_cCalibProcessState = 4;
-                flashParam_calibT2 = in_param_temp;
+                gl_ssh_flashParam_calibT2 = in_param_temp;
               }
             }
             else {
               //у нас есть нормальная минимальная точка калибровки, но нет нормальной максимальной
               gl_cCalibProcessState = 3;
-              flashParam_calibT2 = in_param_temp;
+              gl_ssh_flashParam_calibT2 = in_param_temp;
             }
 
         }
@@ -475,10 +475,10 @@ void processIncomingCommand( void) {
         gl_ush_flashParamT1_TD2_val = 0;
         gl_ush_flashParamT1_TD3_val = 0;
 
-        flashParam_calibT2 = 0;
-        flashParamT2_TD1_val = 1;
-        flashParamT2_TD2_val = 1;
-        flashParamT2_TD3_val = 0;
+        gl_ssh_flashParam_calibT2 = 0;
+        gl_ush_flashParamT2_TD1_val = 1;
+        gl_ush_flashParamT2_TD2_val = 1;
+        gl_ush_flashParamT2_TD3_val = 0;
 
         save_params_p4();
         gl_nSentAddParamIndex = CALIB_T1;
@@ -552,7 +552,7 @@ void processIncomingCommand( void) {
   printf("DBG: After saving page0 device will be locked\n");
 #endif
                   //gl_chLockBit = 1;     прям сразу её ставить нельзя, а то нельзя будет сохранить блокировку! :)
-                  flashLockDev = 1;
+                  gl_ush_flashLockDev = 1;
         }
         else {
 #ifdef DEBUG
