@@ -47,15 +47,17 @@ extern short gl_shFlashParamTCalibUsage;          //флаг использования калбировк
 //калибровка фазового сдвига
 extern char gl_ac_calib_phsh_t[];                 //указатель на массив точек температур фазового сдвига
 extern char gl_ac_calib_phsh_phsh[];              //указатель на массив точек значений фазового сдвига, соответствующих температурам, описанным выше
-extern char gl_cFlashParamPhaseShiftUsage;        //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - не используется
+extern char gl_cFlashParamPhaseShiftUsage;        //флаг использования фазового сдвига:
+                                                  //      0 - используется
+                                                  //      REST (предпочитаю 0xFF) - не используется
 
-
-/*
 //калибровка коэффициента вычета
-extern signed short *gl_passh_calib_dc_t;         //указатель на массив точек температур коэффициента вычета
-extern unsigned short *gl_paush_calib_dc_dc;      //указатель на массив точек значений коэффициента вычета, соответствующих температурам, описанным выше
-extern short gl_shFlashParamDcCalibUsage;        //флаг использования коэффициента вычета: 0 - используется, REST (предпочитаю 0xFF) - не используется
-*/
+extern char gl_ac_calib_dc_t[];                   //массив точек температур калибровки коэффициента вычета
+extern unsigned short gl_ush_calib_dc_dc[];       //массив точек значений коэффициента вычета, соответствующих температурам, описанным выше
+extern char gl_cFlashParamDcCalibUsage;           //флаг использования калибровки коэффициента вычета:
+                                                  //      0 - используется калибровка
+                                                  //      1 - используется перевычисление
+                                                  //      REST (предпочитаю 0xFF) - не используется
 
 void load_params_p1( void) {
   //код амплитуды
@@ -210,8 +212,8 @@ void load_params_p4( void) {
   gl_aushListOutputAddParams[11] = ush_tmp;
 
 
-  //ТЕМПЕРАТУРНАЯ КАЛИБРОВКА
-    //Температура минимальной точки калибровки
+  //КАЛИБРОВКА ТЕРМОДАТЧИКОВ
+  //Температура минимальной точки калибровки
   if( flashEE_load_short( ADDR_TCALIB_T1, ( unsigned short *) &gl_ssh_flashParam_calibT1)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
@@ -315,7 +317,7 @@ void load_params_p4( void) {
   //калибровка фазового сдвига. Точка 11. Фазовый сдвиг
   if( flashEE_load_short( ADDR_PHSH_CALIB_PHSH11, ( unsigned short *) &ush_tmp)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   gl_ac_calib_phsh_phsh[10] = ush_tmp & 0xFF;
-  //Использование температурной калибровки термодатчиков
+  //Использование калибровки фазового сдвига
   if( flashEE_load_short( ADDR_PHSH_CALIB_USAGE, ( unsigned short *) &gl_cFlashParamPhaseShiftUsage)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
 
 #ifdef DEBUG
@@ -339,6 +341,12 @@ void load_params_p4( void) {
     printf("DBG:  ADDR_PHSH_CALIB_PHSH%d: 0x%04x (%04d)\n\n", i+1, gl_ac_calib_phsh_phsh[i], gl_ac_calib_phsh_phsh[i]);
   }
   printf("DBG:  PHASE_SHIFT_USAGE:      0x%04x (%04d)\n\n", i+1, gl_cFlashParamPhaseShiftUsage, gl_cFlashParamPhaseShiftUsage);
+
+  for( i=0; i<11; i++) {
+    printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",   i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
+    printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n", i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
+  }
+  printf("DBG:  DC_CALIB_USAGE:       0x%04x (%04d)\n\n", i+1, gl_cFlashParamDcCalibUsage, gl_cFlashParamDcCalibUsage);
 
   printf("DBG:load_params_p4(): out\n");
 #endif
@@ -778,7 +786,7 @@ void save_params_p4( void) {
     }
   }
 
-  //ТЕМПЕРАТУРНАЯ КАЛИБРОВКА
+  //КАЛИБРОВКА ТЕРМОДАТЧИКОВ
   if( flashEE_save_short( ADDR_TCALIB_T1, gl_ssh_flashParam_calibT1)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
@@ -835,6 +843,27 @@ void save_params_p4( void) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
+
+
+  //КАЛИБРОВКА КОЭФФИЦИЕНТА ВЫЧЕТА
+  for( i=0; i<11; i++) {
+    ush_tmp = gl_ac_calib_dc_t[ i] & 0xFF;
+    if( flashEE_save_short( ADDR_DC_CALIB_T1 + i * 4, ush_tmp)) {
+      gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
+      return;
+    }
+
+    if( flashEE_save_short( ADDR_DC_CALIB_DC1 + i * 4, gl_ush_calib_dc_dc[ i])) {
+      gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
+      return;
+    }
+  }
+
+  if( flashEE_save_short( ADDR_DC_CALIB_USAGE, ( unsigned short) gl_cFlashParamDcCalibUsage)) {
+    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
+    return;
+  }
+
 }
 
 void save_params( void) {
