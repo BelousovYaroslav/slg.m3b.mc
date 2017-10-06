@@ -28,7 +28,7 @@ extern unsigned short gl_ush_flashParamDeviceId;           //ID устройства
 extern unsigned short gl_ush_flashParamDateYear;           //дата ? прибора.год
 extern unsigned short gl_ush_flashParamDateMonth;          //дата ? прибора.месяц
 extern unsigned short gl_ush_flashParamDateDay;            //дата ? прибора.день
-extern char flashParamOrg[];                        //название организации
+extern char gl_ac_flashParamOrg[];                         //название организации
 
 //калибровка термодатчиков
 extern signed short gl_ssh_flashParam_calibT1;
@@ -64,7 +64,7 @@ extern char gl_chAngleOutput;                       //флаг вывода приращения угл
 extern char gl_bSimpleDnDuRegime;                   //флаг режима "частотной нарезки"
                                                     //(выдачи dN,dU с максимально возможной частотой, без снятий аналоговых параметров, без СРП, без контроля амплитуды)
 extern char gl_bCalibProcessState;                  //флаг проведения процесса температурной калибровки термодатчиков
-extern char gl_bTDCalibrated;                       //флаг состояния температурной калибровки термодатчиков: 0=не калиброван, 1=калиброван
+extern char gl_bTDCalibrated;                       //флаг состояния температурной калибровки термодатчиков: 0=датчики не калиброваны, 1=датчики калиброваны
 extern char gl_n_PerimeterReset;                    //флаг сигнала сброса периметра:
                                                     //0 = данные достоверны
                                                     //1 = данные НЕдостоверны, прошло выключение интегратора
@@ -275,37 +275,37 @@ void processIncomingCommand( void) {
           break;
 
           case ORG_B1:    //установить Organization.byte1
-            flashParamOrg[0] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[0] = gl_acInputBuffer[2];  break;
           case ORG_B2:    //установить Organization.byte2
-            flashParamOrg[1] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[1] = gl_acInputBuffer[2];  break;
           case ORG_B3:    //установить Organization.byte3
-            flashParamOrg[2] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[2] = gl_acInputBuffer[2];  break;
           case ORG_B4:    //установить Organization.byte4
-            flashParamOrg[3] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[3] = gl_acInputBuffer[2];  break;
           case ORG_B5:    //установить Organization.byte5
-            flashParamOrg[4] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[4] = gl_acInputBuffer[2];  break;
           case ORG_B6:    //установить Organization.byte6
-            flashParamOrg[5] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[5] = gl_acInputBuffer[2];  break;
           case ORG_B7:    //установить Organization.byte7
-            flashParamOrg[6] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[6] = gl_acInputBuffer[2];  break;
           case ORG_B8:    //установить Organization.byte8
-            flashParamOrg[7] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[7] = gl_acInputBuffer[2];  break;
           case ORG_B9:    //установить Organization.byte9
-            flashParamOrg[8] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[8] = gl_acInputBuffer[2];  break;
           case ORG_B10:   //установить Organization.byte10
-            flashParamOrg[9] = gl_acInputBuffer[2];  break;
+            gl_ac_flashParamOrg[9] = gl_acInputBuffer[2];  break;
           case ORG_B11:   //установить Organization.byte11
-            flashParamOrg[10] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[10] = gl_acInputBuffer[2]; break;
           case ORG_B12:   //установить Organization.byte12
-            flashParamOrg[11] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[11] = gl_acInputBuffer[2]; break;
           case ORG_B13:   //установить Organization.byte13
-            flashParamOrg[12] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[12] = gl_acInputBuffer[2]; break;
           case ORG_B14:   //установить Organization.byte14
-            flashParamOrg[13] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[13] = gl_acInputBuffer[2]; break;
           case ORG_B15:   //установить Organization.byte15
-            flashParamOrg[14] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[14] = gl_acInputBuffer[2]; break;
           case ORG_B16:   //установить Organization.byte16
-            flashParamOrg[15] = gl_acInputBuffer[2]; break;
+            gl_ac_flashParamOrg[15] = gl_acInputBuffer[2]; break;
 
           case PH_SH_CALIB_T:     //Калибровка фазового сдвига. Точка N. Температура            0x39  "9"
             gl_ac_calib_phsh_t[ gl_acInputBuffer[2]] = gl_acInputBuffer[3];

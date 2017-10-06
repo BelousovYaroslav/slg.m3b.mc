@@ -40,8 +40,6 @@ double gl_dbl_Tutd3 = 0;                //температура термодатчика TD3 (корпус)
 signed short gl_ssh_SA_time = 0;        //период SA
 int gl_n_prT1VAL = 0x1000;              //засечка таймера для определения времени такта SA
 
-
-
 unsigned short gl_ush_MeanImpulses = 1;
 
 #define RULA_MAX 4095
@@ -123,16 +121,16 @@ unsigned short gl_ush_flashParamDeviceId = 0;             //ID устройства
 unsigned short gl_ush_flashParamDateYear = 0;             //дата ? прибора.год
 unsigned short gl_ush_flashParamDateMonth = 0;            //дата ? прибора.месяц
 unsigned short gl_ush_flashParamDateDay = 0;              //дата ? прибора.день
-char flashParamOrg[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};    //название организации
+char gl_ac_flashParamOrg[17] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0};    //название организации
 
 unsigned short gl_ushFlashParamLastRULA = 0;      //последнее RULA (obsolete)
 unsigned short gl_ushFlashParamLastRULM = 0;      //последнее RULM (obsolete)
 
-double dStartAmplAngCheck = 0.5;
+
 
 //список выдаваемых аналоговых (доплонительных) параметров
 unsigned short gl_aushListOutputAddParams[12];
-int nSentPackListIndex;
+int gl_nSentPackListIndex;
 
 //калибровка термодатчиков
 signed short   gl_ssh_flashParam_calibT1;
@@ -140,6 +138,18 @@ unsigned short gl_ush_flashParamT1_TD1_val, gl_ush_flashParamT1_TD2_val, gl_ush_
 signed short   gl_ssh_flashParam_calibT2;
 unsigned short gl_ush_flashParamT2_TD1_val, gl_ush_flashParamT2_TD2_val, gl_ush_flashParamT2_TD3_val;
 short gl_shFlashParamTCalibUsage;         //флаг использования калбировки термодатчиков: 0 - используется, REST (предпочитаю 0xFF) - не используется
+char gl_cCalibProcessState;               //флаг-индикатор проведения калибровки
+                                          //      0-не проводится
+                                          //      1 - калибруем первый датчик на минимальной температуре
+                                          //      2 - калибруем второй датчик на минимальной температуре
+                                          //      3 - калибруем третий датчик на минимальной температуре
+                                          //      4 - калибруем первый датчик на максимальной температуре
+                                          //      5 - калибруем второй датчик на максимальной температуре
+                                          //      6 - калибруем третий датчик на максимальной температуре
+char gl_bTDCalibrated;                    //флаг состояния температурной калибровки термодатчиков: 0=не калиброван, 1=калиброван
+double gl_dblTD1_K, gl_dblTD1_B;          //наклон и пьедестал калибровки первого термодатчика
+double gl_dblTD2_K, gl_dblTD2_B;          //наклон и пьедестал калибровки второго термодатчика
+double gl_dblTD3_K, gl_dblTD3_B;          //наклон и пьедестал калибровки третьего термодатчика
 
 //калибровка фазового сдвига
 char gl_ac_calib_phsh_t[11];        //массив точек температур фазового сдвига
@@ -147,19 +157,13 @@ char gl_ac_calib_phsh_phsh[11];     //массив точек значений фазового сдвига, соо
 char gl_cFlashParamPhaseShiftUsage; //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - не используется
 char gl_cCurrentPhaseShift;         //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF
 
-char gl_cCalibProcessState;
-char gl_bTDCalibrated;
-double gl_dblTD1_K, gl_dblTD1_B;
-double gl_dblTD2_K, gl_dblTD2_B;
-double gl_dblTD3_K, gl_dblTD3_B;
-
 //Переменные участвующие в работе системы регулировки амплитуды
-int gl_snMeaningCounter = 0;              //счётчик средних
-int gl_snMeaningCounterRound = 128;       //статистика среднего
-int gl_snMeaningShift = 7;                //степень - насколько сдвигать сумму (log2 от gl_snMeaningCounterRound)
-long gl_lnMeaningSumm = 0;                //сумма амплитуд
-long gl_lnMeanImps = 0;                   //средняя амплитуда (в импульсах интерф. картинки)
-int gl_nActiveRegulationT2 = 0;           //отсечка таймера для сброса флага активной регулировки амплитуды, он же флаг включенного состояния
+int  gl_snMeaningCounter = 0;               //счётчик средних
+int  gl_snMeaningCounterRound = 128;        //статистика среднего
+int  gl_snMeaningShift = 7;                 //степень - насколько сдвигать сумму (log2 от gl_snMeaningCounterRound)
+long gl_lnMeaningSumm = 0;                  //сумма амплитуд
+long gl_lnMeanImps = 0;                     //средняя амплитуда (в импульсах интерф. картинки)
+int  gl_nActiveRegulationT2 = 0;            //отсечка таймера для сброса флага активной регулировки амплитуды, он же флаг включенного состояния
 
 //Переменные участвующие в рассчёте коэффициента вычета "на лету"
 double gl_dblMeanAbsDn;
@@ -978,13 +982,13 @@ int getNextAddParamDescriptorToSendFromList() {
   int nResult;
   char cGoOn, cCnt;
 
-  nResult = gl_aushListOutputAddParams[ nSentPackListIndex];
+  nResult = gl_aushListOutputAddParams[ gl_nSentPackListIndex];
   if ( nResult < 0 || nResult > 254){
     cGoOn = 1; cCnt = 0;
     do {
       cCnt++;
-      nSentPackListIndex = (++nSentPackListIndex) % 12;
-      nResult = gl_aushListOutputAddParams[ nSentPackListIndex];
+      gl_nSentPackListIndex = (++gl_nSentPackListIndex) % 12;
+      nResult = gl_aushListOutputAddParams[ gl_nSentPackListIndex];
       if ( nResult < 0 || nResult > 254){
         if( cCnt > 12)
           return UTD1;
@@ -995,7 +999,7 @@ int getNextAddParamDescriptorToSendFromList() {
     } while( cGoOn);
   }
 
-  nSentPackListIndex = (++nSentPackListIndex) % 12;
+  gl_nSentPackListIndex = (++gl_nSentPackListIndex) % 12;
   return nResult;
 }
 
@@ -1013,6 +1017,11 @@ void main() {
   //переменные используемые в выставке фазового сдвига
   double dblTdCalib;
   char cNewPhaseShift;
+
+  double dStartAmplAngCheck = 0.5;
+
+
+
 
   //по умолчанию мы НЕ ИСПОЛЬЗУЕМ фазовый сдвиг
   gl_cFlashParamPhaseShiftUsage = 0xFF;
@@ -1032,7 +1041,6 @@ void main() {
                                 //4 - processing max_t_point 1st thermosensor
                                 //5 - processing max_t_point 2nd thermosensor
                                 //6 - processing max_t_point 3rd thermosensor
-
 
   // Setup tx & rx pins on P1.0 and P1.1
   GP0CON = 0x00;
@@ -1648,7 +1656,7 @@ void main() {
   gl_n_PerimeterReset = 0;
 
   //берем первый доп. параметр из списка
-  nSentPackListIndex = 0;
+  gl_nSentPackListIndex = 0;
   gl_nSentAddParamIndex = getNextAddParamDescriptorToSendFromList();
 
 
@@ -2044,22 +2052,22 @@ void main() {
           case DATE_M:          send_pack( gl_ush_flashParamDateMonth);       break; //Date.Month
           case DATE_D:          send_pack( gl_ush_flashParamDateDay);         break; //Date.Day
 
-          case ORG_B1:          send_pack( flashParamOrg[ 0]);        break; //Organization.Byte1
-          case ORG_B2:          send_pack( flashParamOrg[ 1]);        break; //Organization.Byte2
-          case ORG_B3:          send_pack( flashParamOrg[ 2]);        break; //Organization.Byte3
-          case ORG_B4:          send_pack( flashParamOrg[ 3]);        break; //Organization.Byte4
-          case ORG_B5:          send_pack( flashParamOrg[ 4]);        break; //Organization.Byte5
-          case ORG_B6:          send_pack( flashParamOrg[ 5]);        break; //Organization.Byte6
-          case ORG_B7:          send_pack( flashParamOrg[ 6]);        break; //Organization.Byte7
-          case ORG_B8:          send_pack( flashParamOrg[ 7]);        break; //Organization.Byte8
-          case ORG_B9:          send_pack( flashParamOrg[ 8]);        break; //Organization.Byte9
-          case ORG_B10:         send_pack( flashParamOrg[ 9]);        break; //Organization.Byte10
-          case ORG_B11:         send_pack( flashParamOrg[10]);        break; //Organization.Byte11
-          case ORG_B12:         send_pack( flashParamOrg[11]);        break; //Organization.Byte12
-          case ORG_B13:         send_pack( flashParamOrg[12]);        break; //Organization.Byte13
-          case ORG_B14:         send_pack( flashParamOrg[13]);        break; //Organization.Byte14
-          case ORG_B15:         send_pack( flashParamOrg[14]);        break; //Organization.Byte15
-          case ORG_B16:         send_pack( flashParamOrg[15]);        break; //Organization.Byte16    БЕЗ завершающего 0 на конце!!!!!
+          case ORG_B1:          send_pack( gl_ac_flashParamOrg[ 0]);          break; //Organization.Byte1
+          case ORG_B2:          send_pack( gl_ac_flashParamOrg[ 1]);          break; //Organization.Byte2
+          case ORG_B3:          send_pack( gl_ac_flashParamOrg[ 2]);          break; //Organization.Byte3
+          case ORG_B4:          send_pack( gl_ac_flashParamOrg[ 3]);          break; //Organization.Byte4
+          case ORG_B5:          send_pack( gl_ac_flashParamOrg[ 4]);          break; //Organization.Byte5
+          case ORG_B6:          send_pack( gl_ac_flashParamOrg[ 5]);          break; //Organization.Byte6
+          case ORG_B7:          send_pack( gl_ac_flashParamOrg[ 6]);          break; //Organization.Byte7
+          case ORG_B8:          send_pack( gl_ac_flashParamOrg[ 7]);          break; //Organization.Byte8
+          case ORG_B9:          send_pack( gl_ac_flashParamOrg[ 8]);          break; //Organization.Byte9
+          case ORG_B10:         send_pack( gl_ac_flashParamOrg[ 9]);          break; //Organization.Byte10
+          case ORG_B11:         send_pack( gl_ac_flashParamOrg[10]);          break; //Organization.Byte11
+          case ORG_B12:         send_pack( gl_ac_flashParamOrg[11]);          break; //Organization.Byte12
+          case ORG_B13:         send_pack( gl_ac_flashParamOrg[12]);          break; //Organization.Byte13
+          case ORG_B14:         send_pack( gl_ac_flashParamOrg[13]);          break; //Organization.Byte14
+          case ORG_B15:         send_pack( gl_ac_flashParamOrg[14]);          break; //Organization.Byte15
+          case ORG_B16:         send_pack( gl_ac_flashParamOrg[15]);          break; //Organization.Byte16    БЕЗ завершающего 0 на конце!!!!!
 
           case VERSION:         send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE)); break; //SOFTWARE VERSION
 

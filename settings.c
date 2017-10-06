@@ -28,7 +28,7 @@ extern unsigned short gl_ush_flashParamDeviceId;           //ID устройства
 extern unsigned short gl_ush_flashParamDateYear;           //Дата ?? прибора: год
 extern unsigned short gl_ush_flashParamDateMonth;          //Дата ?? прибора: месяц
 extern unsigned short gl_ush_flashParamDateDay;            //Дата ?? прибора: день
-extern char flashParamOrg[];                        //название организации
+extern char gl_ac_flashParamOrg[];                         //название организации
 
 //OBSOLETE? Кандидаты на выкидывание
 extern unsigned short gl_ushFlashParamLastRULA;
@@ -151,7 +151,7 @@ void load_params_p3( void) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
   //организация
-  if( flashEE_load_text( ADDR_ORG, flashParamOrg, 16)) {
+  if( flashEE_load_text( ADDR_ORG, gl_ac_flashParamOrg, 16)) {
     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   }
 
@@ -159,7 +159,7 @@ void load_params_p3( void) {
   printf("DBG:load_params_p3()\n");
   printf("DBG:   Sign coeff:      0x%04x (%04d)\n", gl_ush_flashParamSignCoeff, gl_ush_flashParamSignCoeff);  //знаковый коэффициент
   printf("DBG:   Serial number:   0x%04x (%04d)\n", gl_ush_flashParamDeviceId,  gl_ush_flashParamDeviceId);   //серийный номер
-  printf("DBG:   Organization:    '%s'\n", flashParamOrg);                                     //организация
+  printf("DBG:   Organization:    '%s'\n", gl_ac_flashParamOrg);                                              //организация
   printf("DBG:   Year:            0x%04x (%04d)\n", gl_ush_flashParamDateYear,  gl_ush_flashParamDateYear);   //год
   printf("DBG:   Month:           0x%04x (%04d)\n", gl_ush_flashParamDateMonth, gl_ush_flashParamDateMonth);  //месяц
   printf("DBG:   Day:             0x%04x (%04d)\n", gl_ush_flashParamDateDay,   gl_ush_flashParamDateDay);    //день
@@ -466,8 +466,8 @@ void check_params_p3( void) {
   //название организации
   //default - все минусы
   for( i=0; i<17; i++) {
-    if( flashParamOrg[i] < 33 || flashParamOrg[i] > 126)
-      flashParamOrg[i] = ' ';
+    if( gl_ac_flashParamOrg[i] < 33 || gl_ac_flashParamOrg[i] > 126)
+      gl_ac_flashParamOrg[i] = ' ';
   }
 
 
@@ -479,7 +479,7 @@ void check_params_p3( void) {
   printf("DBG:   Year:           0x%04x (%04d)\n", gl_ush_flashParamDateYear,  gl_ush_flashParamDateYear);    //год
   printf("DBG:   Month:          0x%04x (%04d)\n", gl_ush_flashParamDateMonth, gl_ush_flashParamDateMonth);   //месяц
   printf("DBG:   Day:            0x%04x (%04d)\n", gl_ush_flashParamDateDay,   gl_ush_flashParamDateDay);     //день
-  printf("DBG:   Organization:   '%s'\n", flashParamOrg);                                     //организация
+  printf("DBG:   Organization:   '%s'\n", gl_ac_flashParamOrg);                                               //организация
 #endif
 }
 
@@ -709,7 +709,7 @@ void save_params_p3( void) {
   printf("DBG: save_params_p3(): params to be saved are:\n");
   printf("DBG:   Sign coeff:     0x%04x (%04d)\n", gl_ush_flashParamSignCoeff, gl_ush_flashParamSignCoeff);   //Знаковый коэффициент
   printf("DBG:   Serial number:  0x%04x (%04d)\n", gl_ush_flashParamDeviceId,  gl_ush_flashParamDeviceId);    //серийный номер
-  printf("DBG:   Organization:   '%s'\n", flashParamOrg);                                     //организация
+  printf("DBG:   Organization:   '%s'\n", gl_ac_flashParamOrg);                                               //организация
   printf("DBG:   Year:           0x%04x (%04d)\n", gl_ush_flashParamDateYear,  gl_ush_flashParamDateYear);    //год
   printf("DBG:   Month:          0x%04x (%04d)\n", gl_ush_flashParamDateMonth, gl_ush_flashParamDateMonth);   //месяц
   printf("DBG:   Day:            0x%04x (%04d)\n", gl_ush_flashParamDateDay,   gl_ush_flashParamDateDay);     //день
@@ -740,7 +740,7 @@ void save_params_p3( void) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_text( ADDR_ORG, flashParamOrg, 16)) {
+  if( flashEE_save_text( ADDR_ORG, gl_ac_flashParamOrg, 16)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }

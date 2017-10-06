@@ -18,7 +18,7 @@ extern unsigned short gl_ush_flashParamDeviceId;
 extern unsigned short gl_ush_flashParamDateYear;
 extern unsigned short gl_ush_flashParamDateMonth;
 extern unsigned short gl_ush_flashParamDateDay;
-extern char flashParamOrg[];
+extern char           gl_ac_flashParamOrg[];
 
 //declared in Main.c
 extern char gl_c_EmergencyCode;                     //код ошибки
@@ -75,22 +75,22 @@ void deadloop_no_tact( int nError) {
     gl_nSentAddParamIndex = DATE_Y;       send_pack( gl_ush_flashParamDateYear);
     gl_nSentAddParamIndex = DATE_M;       send_pack( gl_ush_flashParamDateMonth);
     gl_nSentAddParamIndex = DATE_D;       send_pack( gl_ush_flashParamDateDay);
-    gl_nSentAddParamIndex = ORG_B1;       send_pack( flashParamOrg[ 0]);
-    gl_nSentAddParamIndex = ORG_B2;       send_pack( flashParamOrg[ 1]);
-    gl_nSentAddParamIndex = ORG_B3;       send_pack( flashParamOrg[ 2]);
-    gl_nSentAddParamIndex = ORG_B4;       send_pack( flashParamOrg[ 3]);
-    gl_nSentAddParamIndex = ORG_B5;       send_pack( flashParamOrg[ 4]);
-    gl_nSentAddParamIndex = ORG_B6;       send_pack( flashParamOrg[ 5]);
-    gl_nSentAddParamIndex = ORG_B7;       send_pack( flashParamOrg[ 6]);
-    gl_nSentAddParamIndex = ORG_B8;       send_pack( flashParamOrg[ 7]);
-    gl_nSentAddParamIndex = ORG_B9;       send_pack( flashParamOrg[ 8]);
-    gl_nSentAddParamIndex = ORG_B10;      send_pack( flashParamOrg[ 9]);
-    gl_nSentAddParamIndex = ORG_B11;      send_pack( flashParamOrg[ 10]);
-    gl_nSentAddParamIndex = ORG_B12;      send_pack( flashParamOrg[ 11]);
-    gl_nSentAddParamIndex = ORG_B13;      send_pack( flashParamOrg[ 12]);
-    gl_nSentAddParamIndex = ORG_B14;      send_pack( flashParamOrg[ 13]);
-    gl_nSentAddParamIndex = ORG_B15;      send_pack( flashParamOrg[ 14]);
-    gl_nSentAddParamIndex = ORG_B16;      send_pack( flashParamOrg[ 15]);
+    gl_nSentAddParamIndex = ORG_B1;       send_pack( gl_ac_flashParamOrg[ 0]);
+    gl_nSentAddParamIndex = ORG_B2;       send_pack( gl_ac_flashParamOrg[ 1]);
+    gl_nSentAddParamIndex = ORG_B3;       send_pack( gl_ac_flashParamOrg[ 2]);
+    gl_nSentAddParamIndex = ORG_B4;       send_pack( gl_ac_flashParamOrg[ 3]);
+    gl_nSentAddParamIndex = ORG_B5;       send_pack( gl_ac_flashParamOrg[ 4]);
+    gl_nSentAddParamIndex = ORG_B6;       send_pack( gl_ac_flashParamOrg[ 5]);
+    gl_nSentAddParamIndex = ORG_B7;       send_pack( gl_ac_flashParamOrg[ 6]);
+    gl_nSentAddParamIndex = ORG_B8;       send_pack( gl_ac_flashParamOrg[ 7]);
+    gl_nSentAddParamIndex = ORG_B9;       send_pack( gl_ac_flashParamOrg[ 8]);
+    gl_nSentAddParamIndex = ORG_B10;      send_pack( gl_ac_flashParamOrg[ 9]);
+    gl_nSentAddParamIndex = ORG_B11;      send_pack( gl_ac_flashParamOrg[ 10]);
+    gl_nSentAddParamIndex = ORG_B12;      send_pack( gl_ac_flashParamOrg[ 11]);
+    gl_nSentAddParamIndex = ORG_B13;      send_pack( gl_ac_flashParamOrg[ 12]);
+    gl_nSentAddParamIndex = ORG_B14;      send_pack( gl_ac_flashParamOrg[ 13]);
+    gl_nSentAddParamIndex = ORG_B15;      send_pack( gl_ac_flashParamOrg[ 14]);
+    gl_nSentAddParamIndex = ORG_B16;      send_pack( gl_ac_flashParamOrg[ 15]);
     gl_nSentAddParamIndex = VERSION;      send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
 
   }  //"мертвый" while отсутствия тактирования
@@ -153,22 +153,22 @@ void deadloop_no_hangerup( void) {
     gl_nSentAddParamIndex = DATE_Y;       send_pack( gl_ush_flashParamDateYear);
     gl_nSentAddParamIndex = DATE_M;       send_pack( gl_ush_flashParamDateMonth);
     gl_nSentAddParamIndex = DATE_D;       send_pack( gl_ush_flashParamDateDay);
-    gl_nSentAddParamIndex = ORG_B1;       send_pack( flashParamOrg[ 0]);
-    gl_nSentAddParamIndex = ORG_B2;       send_pack( flashParamOrg[ 1]);
-    gl_nSentAddParamIndex = ORG_B3;       send_pack( flashParamOrg[ 2]);
-    gl_nSentAddParamIndex = ORG_B4;       send_pack( flashParamOrg[ 3]);
-    gl_nSentAddParamIndex = ORG_B5;       send_pack( flashParamOrg[ 4]);
-    gl_nSentAddParamIndex = ORG_B6;       send_pack( flashParamOrg[ 5]);
-    gl_nSentAddParamIndex = ORG_B7;       send_pack( flashParamOrg[ 6]);
-    gl_nSentAddParamIndex = ORG_B8;       send_pack( flashParamOrg[ 7]);
-    gl_nSentAddParamIndex = ORG_B9;       send_pack( flashParamOrg[ 8]);
-    gl_nSentAddParamIndex = ORG_B10;      send_pack( flashParamOrg[ 9]);
-    gl_nSentAddParamIndex = ORG_B11;      send_pack( flashParamOrg[ 10]);
-    gl_nSentAddParamIndex = ORG_B12;      send_pack( flashParamOrg[ 11]);
-    gl_nSentAddParamIndex = ORG_B13;      send_pack( flashParamOrg[ 12]);
-    gl_nSentAddParamIndex = ORG_B14;      send_pack( flashParamOrg[ 13]);
-    gl_nSentAddParamIndex = ORG_B15;      send_pack( flashParamOrg[ 14]);
-    gl_nSentAddParamIndex = ORG_B16;      send_pack( flashParamOrg[ 15]);
+    gl_nSentAddParamIndex = ORG_B1;       send_pack( gl_ac_flashParamOrg[ 0]);
+    gl_nSentAddParamIndex = ORG_B2;       send_pack( gl_ac_flashParamOrg[ 1]);
+    gl_nSentAddParamIndex = ORG_B3;       send_pack( gl_ac_flashParamOrg[ 2]);
+    gl_nSentAddParamIndex = ORG_B4;       send_pack( gl_ac_flashParamOrg[ 3]);
+    gl_nSentAddParamIndex = ORG_B5;       send_pack( gl_ac_flashParamOrg[ 4]);
+    gl_nSentAddParamIndex = ORG_B6;       send_pack( gl_ac_flashParamOrg[ 5]);
+    gl_nSentAddParamIndex = ORG_B7;       send_pack( gl_ac_flashParamOrg[ 6]);
+    gl_nSentAddParamIndex = ORG_B8;       send_pack( gl_ac_flashParamOrg[ 7]);
+    gl_nSentAddParamIndex = ORG_B9;       send_pack( gl_ac_flashParamOrg[ 8]);
+    gl_nSentAddParamIndex = ORG_B10;      send_pack( gl_ac_flashParamOrg[ 9]);
+    gl_nSentAddParamIndex = ORG_B11;      send_pack( gl_ac_flashParamOrg[ 10]);
+    gl_nSentAddParamIndex = ORG_B12;      send_pack( gl_ac_flashParamOrg[ 11]);
+    gl_nSentAddParamIndex = ORG_B13;      send_pack( gl_ac_flashParamOrg[ 12]);
+    gl_nSentAddParamIndex = ORG_B14;      send_pack( gl_ac_flashParamOrg[ 13]);
+    gl_nSentAddParamIndex = ORG_B15;      send_pack( gl_ac_flashParamOrg[ 14]);
+    gl_nSentAddParamIndex = ORG_B16;      send_pack( gl_ac_flashParamOrg[ 15]);
     gl_nSentAddParamIndex = VERSION;      send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
 
   } //"мертвый" захват отказа раскачки виброподвеса
@@ -187,16 +187,16 @@ void deadloop_no_firing( int nError) {
   gl_ssh_angle_inc = gl_ssh_angle_inc_prev = 0;
 
   //выдача данных
-    gl_nSentAddParamIndex = AMPLITUDE;  send_pack( gl_ush_flashParamAmplitudeCode);
-    gl_nSentAddParamIndex = TACT_CODE;  send_pack( gl_ush_flashParamTactCode);
-    gl_nSentAddParamIndex = M_COEFF;    send_pack( gl_ush_flashParamMCoeff);
-    gl_nSentAddParamIndex = STARTMODE;  send_pack( gl_ush_flashParamStartMode);
-    gl_nSentAddParamIndex = CONTROL_I1; send_pack( gl_ush_flashParamI1min);
-    gl_nSentAddParamIndex = CONTROL_I2; send_pack( gl_ush_flashParamI2min);
-    gl_nSentAddParamIndex = CONTROL_AA; send_pack( gl_ush_flashParamAmplAngMin1);
-    gl_nSentAddParamIndex = DECCOEFF;   send_pack( gl_ush_flashParamDecCoeff);
-    gl_nSentAddParamIndex = SIGNCOEFF;  send_pack( gl_ush_flashParamSignCoeff);
-    gl_nSentAddParamIndex = VERSION;    send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
+  gl_nSentAddParamIndex = AMPLITUDE;  send_pack( gl_ush_flashParamAmplitudeCode);
+  gl_nSentAddParamIndex = TACT_CODE;  send_pack( gl_ush_flashParamTactCode);
+  gl_nSentAddParamIndex = M_COEFF;    send_pack( gl_ush_flashParamMCoeff);
+  gl_nSentAddParamIndex = STARTMODE;  send_pack( gl_ush_flashParamStartMode);
+  gl_nSentAddParamIndex = CONTROL_I1; send_pack( gl_ush_flashParamI1min);
+  gl_nSentAddParamIndex = CONTROL_I2; send_pack( gl_ush_flashParamI2min);
+  gl_nSentAddParamIndex = CONTROL_AA; send_pack( gl_ush_flashParamAmplAngMin1);
+  gl_nSentAddParamIndex = DECCOEFF;   send_pack( gl_ush_flashParamDecCoeff);
+  gl_nSentAddParamIndex = SIGNCOEFF;  send_pack( gl_ush_flashParamSignCoeff);
+  gl_nSentAddParamIndex = VERSION;    send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
 
   gl_n_prT1VAL = T1VAL;
   while( 1) {
@@ -226,22 +226,22 @@ void deadloop_no_firing( int nError) {
     gl_nSentAddParamIndex = DATE_Y;       send_pack( gl_ush_flashParamDateYear);
     gl_nSentAddParamIndex = DATE_M;       send_pack( gl_ush_flashParamDateMonth);
     gl_nSentAddParamIndex = DATE_D;       send_pack( gl_ush_flashParamDateDay);
-    gl_nSentAddParamIndex = ORG_B1;       send_pack( flashParamOrg[ 0]);
-    gl_nSentAddParamIndex = ORG_B2;       send_pack( flashParamOrg[ 1]);
-    gl_nSentAddParamIndex = ORG_B3;       send_pack( flashParamOrg[ 2]);
-    gl_nSentAddParamIndex = ORG_B4;       send_pack( flashParamOrg[ 3]);
-    gl_nSentAddParamIndex = ORG_B5;       send_pack( flashParamOrg[ 4]);
-    gl_nSentAddParamIndex = ORG_B6;       send_pack( flashParamOrg[ 5]);
-    gl_nSentAddParamIndex = ORG_B7;       send_pack( flashParamOrg[ 6]);
-    gl_nSentAddParamIndex = ORG_B8;       send_pack( flashParamOrg[ 7]);
-    gl_nSentAddParamIndex = ORG_B9;       send_pack( flashParamOrg[ 8]);
-    gl_nSentAddParamIndex = ORG_B10;      send_pack( flashParamOrg[ 9]);
-    gl_nSentAddParamIndex = ORG_B11;      send_pack( flashParamOrg[ 10]);
-    gl_nSentAddParamIndex = ORG_B12;      send_pack( flashParamOrg[ 11]);
-    gl_nSentAddParamIndex = ORG_B13;      send_pack( flashParamOrg[ 12]);
-    gl_nSentAddParamIndex = ORG_B14;      send_pack( flashParamOrg[ 13]);
-    gl_nSentAddParamIndex = ORG_B15;      send_pack( flashParamOrg[ 14]);
-    gl_nSentAddParamIndex = ORG_B16;      send_pack( flashParamOrg[ 15]);
+    gl_nSentAddParamIndex = ORG_B1;       send_pack( gl_ac_flashParamOrg[ 0]);
+    gl_nSentAddParamIndex = ORG_B2;       send_pack( gl_ac_flashParamOrg[ 1]);
+    gl_nSentAddParamIndex = ORG_B3;       send_pack( gl_ac_flashParamOrg[ 2]);
+    gl_nSentAddParamIndex = ORG_B4;       send_pack( gl_ac_flashParamOrg[ 3]);
+    gl_nSentAddParamIndex = ORG_B5;       send_pack( gl_ac_flashParamOrg[ 4]);
+    gl_nSentAddParamIndex = ORG_B6;       send_pack( gl_ac_flashParamOrg[ 5]);
+    gl_nSentAddParamIndex = ORG_B7;       send_pack( gl_ac_flashParamOrg[ 6]);
+    gl_nSentAddParamIndex = ORG_B8;       send_pack( gl_ac_flashParamOrg[ 7]);
+    gl_nSentAddParamIndex = ORG_B9;       send_pack( gl_ac_flashParamOrg[ 8]);
+    gl_nSentAddParamIndex = ORG_B10;      send_pack( gl_ac_flashParamOrg[ 9]);
+    gl_nSentAddParamIndex = ORG_B11;      send_pack( gl_ac_flashParamOrg[ 10]);
+    gl_nSentAddParamIndex = ORG_B12;      send_pack( gl_ac_flashParamOrg[ 11]);
+    gl_nSentAddParamIndex = ORG_B13;      send_pack( gl_ac_flashParamOrg[ 12]);
+    gl_nSentAddParamIndex = ORG_B14;      send_pack( gl_ac_flashParamOrg[ 13]);
+    gl_nSentAddParamIndex = ORG_B15;      send_pack( gl_ac_flashParamOrg[ 14]);
+    gl_nSentAddParamIndex = ORG_B16;      send_pack( gl_ac_flashParamOrg[ 15]);
     gl_nSentAddParamIndex = VERSION;      send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
 
   } //"мертвый" while
