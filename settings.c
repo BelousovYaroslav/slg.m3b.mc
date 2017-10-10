@@ -497,6 +497,7 @@ void check_params_p4( void) {
 
   char c_t;
   char c_phsh;
+  unsigned short ush_dc;
 
   //—œ»—Œ  ¿Õ¿ÀŒ√Œ¬€’ (ƒŒœ.) œ¿–¿Ã≈“–Œ¬
   for( i=0; i<12; i++) {
@@ -538,10 +539,11 @@ void check_params_p4( void) {
     gl_ush_flashParamT2_TD3_val = 2;
   }
 
-  // ¿À»¡–Œ¬ ¿ ‘¿«Œ¬Œ√Œ —ƒ¬»√¿
+  //—Œ–“»–Œ¬ ¿ “¿¡À»÷
   for( i=0; i<10; i++) {
     for( j=0; j<10; j++) {
 
+      // ¿À»¡–Œ¬ ¿ ‘¿«Œ¬Œ√Œ —ƒ¬»√¿
       if( gl_ac_calib_phsh_t[ j] > gl_ac_calib_phsh_t[ j + 1]) {
         c_t = gl_ac_calib_phsh_t[ j + 1];
         gl_ac_calib_phsh_t[ j + 1] = gl_ac_calib_phsh_t[ j];
@@ -550,6 +552,17 @@ void check_params_p4( void) {
         c_phsh = gl_ac_calib_phsh_phsh[ j + 1];
         gl_ac_calib_phsh_phsh[ j + 1] = gl_ac_calib_phsh_phsh[ j];
         gl_ac_calib_phsh_phsh[ j] = c_phsh;
+      }
+
+      // ¿À»¡–Œ¬ ¿  Œ›‘‘»÷»≈Õ“¿ ¬€◊≈“¿
+      if( gl_ac_calib_dc_t[ j] > gl_ac_calib_dc_t[ j + 1]) {
+        c_t = gl_ac_calib_dc_t[ j + 1];
+        gl_ac_calib_dc_t[ j + 1] = gl_ac_calib_dc_t[ j];
+        gl_ac_calib_dc_t[ j] = c_t;
+
+        ush_dc = gl_ush_calib_dc_dc[ j + 1];
+        gl_ush_calib_dc_dc[ j + 1] = gl_ush_calib_dc_dc[ j];
+        gl_ush_calib_dc_dc[ j] = ush_dc;
       }
     }
   }

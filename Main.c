@@ -90,6 +90,7 @@ int gl_nADCChannel = 0; //читаемый канал АЦП
 long gl_lSecondsFromStart;
 long gl_l5SecPrevValue;
 long gl_lCalibratedPhaseShiftApplySecs;
+long gl_lCalibratedDcApplySecs;
 int  gl_nSecondsT2Lock;
 
 
@@ -1022,14 +1023,16 @@ void main() {
   //переменные используемые в выставке фазового сдвига
   double dblTdCalib;
   char cNewPhaseShift;
+  unsigned short ushNewDc;
 
   double dStartAmplAngCheck = 0.5;
 
-
-
+  //по умолчанию мы НЕ ИСПОЛЬЗУЕМ изменения (калибровку или перевычисление) коэффициента вычета (но это перетрется в загрузке настроек)
+  gl_cFlashParamDcCalibUsage = 0xFF;
 
   //по умолчанию мы НЕ ИСПОЛЬЗУЕМ фазовый сдвиг
   gl_cFlashParamPhaseShiftUsage = 0xFF;
+
   //по умолчанию выставленный байт фазового сдвига = 0xFF (что трактуется как не выставлено)
   gl_cCurrentPhaseShift = 0xFF;
 
@@ -1259,6 +1262,7 @@ void main() {
   gl_l5SecPrevValue = 0;
   gl_nSecondsT2Lock = T2VAL;
   gl_lCalibratedPhaseShiftApplySecs = 0;
+  gl_lCalibratedDcApplySecs = 0;
 
   //**********************************************************************
   // Конфигурация и выставка ЦАП
@@ -2109,6 +2113,20 @@ void main() {
           case PH_SH_CURRENT_VAL: 
                                 send_pack( gl_cCurrentPhaseShift);               break; //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
 
+          case DC_CALIB_T:
+                                send_pack( ( gl_ac_calib_dc_t[ gl_nSentAddParamSubIndex] << 8) + gl_nSentAddParamSubIndex);
+                                                                                 break; //калибровка коэффициента вычета. температура
+
+          case DC_CALIB_DC_L:
+                                send_pack( ( ( gl_ush_calib_dc_dc[ gl_nSentAddParamSubIndex] & 0xFF) << 8) + gl_nSentAddParamSubIndex);
+                                                                                 break; //калибровка коэффициента вычета. коэффициент вычета. младший байт
+
+          case DC_CALIB_DC_H:
+                                send_pack( ( gl_ush_calib_dc_dc[ gl_nSentAddParamSubIndex] & 0xFF00) + gl_nSentAddParamSubIndex);
+                                                                                 break; //калибровка коэффициента вычета. коэффициент вычета. старший байт
+
+          case DC_CALIB_USAGE:  send_pack( gl_cFlashParamDcCalibUsage);          break; //калибровка коэффициента вычета. использование
+
           default:              send_pack( gl_ssh_Utd1);                         break; //DEFAULT = UTD1
         }
 
@@ -2152,33 +2170,58 @@ void main() {
             case AMPL_HOLD_MEAN:  gl_nSentAddParamIndex = AMPL_HOLD_ROUND;   break; //amplitude hold algoryhtm: mean
             case AMPL_HOLD_ROUND: gl_nSentAddParamIndex = AMPL_HOLD_ACTIVE;  break; //amplitude hold algoryhtm: round
 
+            case DC_CALIB_DC_L:   gl_nSentAddParamIndex = DC_CALIB_DC_H;     break; //калибровка коэффициента вычета. табличный коэффициент вычета. младший байт (за ним авто-выдаётся старший)
+
             default:
               gl_nSentAddParamIndex = getNextAddParamDescriptorToSendFromList();
           }
         }
 
-        //РАБОЧЕЕ ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
-        if( gl_b_SyncMode && ( gl_nSentAddParamIndex != UTD2)) {
-          dbl_N1 = ( double) gl_ssh_angle_inc_prev;
-          dbl_N2 = ( double) gl_ssh_angle_inc;
-          dbl_U1 = ( double) gl_ssh_angle_hanger_prev;
-          dbl_U2 = ( double) gl_ssh_angle_hanger;
+        //ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
+        switch( gl_cFlashParamDcCalibUsage) {
 
-          Coeff = (( float) gl_ush_flashParamDecCoeff) / 65535.;
-          gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) gl_ush_flashParamSignCoeff - 1);
-          if( fabs( gl_dbl_Omega) < 5) {
-            gl_dbl_Nsumm += fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
-            gl_dbl_Usumm += fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
-            gl_un_DecCoeffStatPoints++;
-            if( ( gl_un_DecCoeffStatPoints % DEC_COEFF_CONTINUOUS_CALCULATION_N) == 0 &&
-                ( ( ( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL) % T2LD) >= 32768 ) ) {
-              //gl_ush_flashParamDecCoeff = ( short) ( ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
-              gl_ush_flashParamDecCoeff = ( short) ( ( int) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
-              gl_dbl_Nsumm = gl_dbl_Usumm = 0.;
-              gl_un_DecCoeffStatPoints = 0;
-              gl_nSentAddParamIndex = DECCOEFF;
+          case 0: //через использование калибровки
+            if( gl_lSecondsFromStart >= gl_lCalibratedDcApplySecs) {
+              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 300;
+
+              ushNewDc = gl_ush_calib_dc_dc[0];
+              for( i=1; i<11; i++) {
+                if( gl_ac_calib_dc_t[i] == 0xFF) break;
+                if( gl_dbl_Tutd1 > gl_ac_calib_dc_t[i] - 128. ) ushNewDc = gl_ush_calib_dc_dc[i];
+              }
+
+              if( ushNewDc != gl_ush_flashParamDecCoeff)
+                gl_ush_flashParamDecCoeff = ushNewDc;
+
             }
-          }
+          break;
+
+          case 1: //перевычисление на лету
+
+            if( gl_b_SyncMode && ( gl_nSentAddParamIndex != UTD2)) {
+              dbl_N1 = ( double) gl_ssh_angle_inc_prev;
+              dbl_N2 = ( double) gl_ssh_angle_inc;
+              dbl_U1 = ( double) gl_ssh_angle_hanger_prev;
+              dbl_U2 = ( double) gl_ssh_angle_hanger;
+
+              Coeff = (( float) gl_ush_flashParamDecCoeff) / 65535.;
+              gl_dbl_Omega =  ( dbl_N2 - dbl_N1) - ( dbl_U2 - dbl_U1) * Coeff * ( ( signed short) gl_ush_flashParamSignCoeff - 1);
+              if( fabs( gl_dbl_Omega) < 5) {
+                gl_dbl_Nsumm += fabs( ( double) gl_ssh_angle_inc - ( double) gl_ssh_angle_inc_prev);
+                gl_dbl_Usumm += fabs( ( double) gl_ssh_angle_hanger - ( double) gl_ssh_angle_hanger_prev);
+                gl_un_DecCoeffStatPoints++;
+                if( ( gl_un_DecCoeffStatPoints % DEC_COEFF_CONTINUOUS_CALCULATION_N) == 0 &&
+                    ( ( ( gl_un_PrevT2DecCoeffCalc + T2LD - T2VAL) % T2LD) >= 32768 ) ) {
+                  //gl_ush_flashParamDecCoeff = ( short) ( ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
+                  gl_ush_flashParamDecCoeff = ( short) ( ( int) ( gl_dbl_Nsumm / gl_dbl_Usumm * 65535.));
+                  gl_dbl_Nsumm = gl_dbl_Usumm = 0.;
+                  gl_un_DecCoeffStatPoints = 0;
+                  gl_nSentAddParamIndex = DECCOEFF;
+                }
+              }
+            }
+          break;
+
         }
 
 
