@@ -43,7 +43,7 @@ extern char gl_cCalibProcessState;
 extern char gl_ac_calib_phsh_t[];                   //калибровка фазового сдвига. массив температур
 extern char gl_ac_calib_phsh_phsh[];                //калибровка фазового сдвига. массив соответствующих фазовых сдвигов
 extern char gl_cFlashParamPhaseShiftUsage;          //использование фазового сдвига
-extern char gl_cCurrentPhaseShift;                  //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF
+extern int  gl_nCurrentPhaseShift;                  //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF
 
 extern unsigned short gl_ushFlashParamLastRULA;     //последнее RULA (obsolete)
 extern unsigned short gl_ushFlashParamLastRULM;     //последнее RULM (obsolete)
@@ -83,6 +83,12 @@ extern unsigned int gl_un_RULAControl;              //код сигнала RULA выдаваемы
 
 extern short gl_nSentAddParamIndex;                 //Analogue Parameter Index (what are we sending now)
 extern short gl_nSentAddParamSubIndex;              //Analogue Parameter sub-Index (what are we sending now)
+
+
+//переменные участвующие в счётчике секунд относительно старта прибора
+extern long gl_lSecondsFromStart;                   //собственно сами секунды
+extern long gl_lCalibratedPhaseShiftApplySecs;      //секунда, на которой нам надо перевычислить фазовый сдвиг
+extern long gl_lCalibratedDcApplySecs;              //секунда, на которой нам надо перевычислить Квычета
 
 //функции
 extern void configure_hanger( void);                //функция выстаки кода такта подставки
@@ -211,6 +217,9 @@ void processIncomingCommand( void) {
             gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = DECCOEFF;
 
+            //засечём новую 1 мин
+            gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 60;
+
             //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
             gl_nMeanDecCoeffCounter = 0;
             gl_dblMeanAbsDn = 0.;
@@ -326,7 +335,8 @@ void processIncomingCommand( void) {
           break;
 
           case PH_SH_CURRENT_VAL: //Фазовый сдвиг. Текущее значение.                            0x3B  ";"
-            gl_cCurrentPhaseShift = gl_acInputBuffer[2];
+            gl_nCurrentPhaseShift = gl_acInputBuffer[2] + 0x100;
+            gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart;
           break;
 
           case PH_SH_USAGE:       //Калибровка фазового сдвига. Использование                   0x3D  "="
@@ -404,7 +414,7 @@ void processIncomingCommand( void) {
               }
 
             }
-            else if( gl_acInputBuffer[2] == 0x01) {
+            else {
               gl_cFlashParamDcCalibUsage = gl_acInputBuffer[2];
             }
 

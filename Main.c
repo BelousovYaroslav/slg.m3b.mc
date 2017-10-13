@@ -156,7 +156,7 @@ double gl_dblTD3_K, gl_dblTD3_B;          //наклон и пьедестал калибровки третье
 char gl_ac_calib_phsh_t[11];        //массив точек температур фазового сдвига
 char gl_ac_calib_phsh_phsh[11];     //массив точек значений фазового сдвига, соответствующих температурам, описанным выше
 char gl_cFlashParamPhaseShiftUsage; //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - не используется
-char gl_cCurrentPhaseShift;         //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF
+int  gl_nCurrentPhaseShift;         //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF        битик 0x100 - manual set
 
 //калибровка коэффициента вычета
 char gl_ac_calib_dc_t[11];              //массив точек температур калибровки коэффициента вычета
@@ -563,7 +563,7 @@ void FirstDecrementCoeffCalculation( void) {
 
 
   // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // *****
-  // 2. в случае асинхр режима, запрашиваем у альтеры код счётчика информационных импульсов
+  // 2. в случае асинхр режима, запрашиваем у альтеры угол отклонения виброподвеса
   if( gl_b_SyncMode) {
     //ждём высокого уровня сигнала готовности ANGLE_READY (p2.4)
     while( !( GP2DAT & 0x10)) {}
@@ -585,7 +585,7 @@ void FirstDecrementCoeffCalculation( void) {
     GP0CLR = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 0
 
 
-    //запрашиваем младший байт кода счётчика информационных импульсов
+    //запрашиваем младший байт угла поворота вибратора
     GP2SET = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 1
     pause( 1);                //пауза
 
@@ -669,7 +669,7 @@ void FirstDecrementCoeffCalculation( void) {
 
 
     // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // *****
-    // 2. в случае асинхр режима, запрашиваем у альтеры код счётчика информационных импульсов
+    // 2. в случае асинхр режима, запрашиваем у альтеры угол отклонения виброподвеса
 
     //ждём высокого уровня сигнала готовности ANGLE_READY (p2.4)
     while( !( GP2DAT & 0x10)) {}
@@ -691,7 +691,7 @@ void FirstDecrementCoeffCalculation( void) {
     GP0CLR = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 0
 
 
-    //запрашиваем младший байт кода счётчика информационных импульсов
+    //запрашиваем младший байт угла поворота вибратора
     GP2SET = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 1
     pause( 1);                //пауза
 
@@ -1017,13 +1017,12 @@ void main() {
   int prt2val;
 
   //переменные используемые в перевычислении коэффициента вычета
-  double dbl_N1, dbl_N2, dbl_U1, dbl_U2;
+  double dbl_N1 = 2., dbl_N2, dbl_U1, dbl_U2;
   float Coeff;
 
   //переменные используемые в выставке фазового сдвига
   double dblTdCalib;
   char cNewPhaseShift;
-  unsigned short ushNewDc;
 
   double dStartAmplAngCheck = 0.5;
 
@@ -1034,7 +1033,7 @@ void main() {
   gl_cFlashParamPhaseShiftUsage = 0xFF;
 
   //по умолчанию выставленный байт фазового сдвига = 0xFF (что трактуется как не выставлено)
-  gl_cCurrentPhaseShift = 0xFF;
+  gl_nCurrentPhaseShift = 0xFF;
 
   //по умолчанию мы НЕ ИСПОЛЬЗУЕМ калибровку термодатчиков
   gl_shFlashParamTCalibUsage = 0xFF;
@@ -1156,6 +1155,7 @@ void main() {
   //**********************************************************************
   GP4DAT |= 1 << (16 + 3);      //Reset set
   for( i=0; i<100; i++);
+  //dbl_N1 = dbl_N1 / 2.;
   GP4DAT &= ~( 1 << (16 + 3));  //Reset clear
 
 #ifdef DEBUG
@@ -1298,10 +1298,81 @@ void main() {
   //**********************************************************************
   configure_hanger();
 
+
   //**********************************************************************
   // ВКЛЮЧЕНИЕ ВИБРОПОДВЕСА
   //**********************************************************************
   GP2DAT |= ( 1 << (16 + 2));  //EN_VB   (p2.2) = 1
+
+
+  //**********************************************************************
+  //ОПРЕДЕЛЕНИЕ ТЕМПЕРАТУРЫ TD1 (дальше может использоваться в получении значений для калибровок по температуре)
+  //**********************************************************************
+  ADCCP = ADC_CHANNEL_UTD1;
+  ADCCON |= 0x80;
+  while (!( ADCSTA & 0x01)){}
+
+  gl_ssh_Utd1 = (ADCDAT >> 16);
+  gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
+  /*
+  #ifdef DEBUG
+    printf("DEBUG: ADC0 = %.02f V\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5);
+  #endif
+  */
+
+
+  //**********************************************************************
+  //СТАРТОВАЯ ВЫСТАВКА ФАЗОВОГО СДВИГА
+  //**********************************************************************
+  cNewPhaseShift = gl_ac_calib_phsh_phsh[0];
+
+  if( cNewPhaseShift == 0xFF)
+    cNewPhaseShift = 75;
+
+  for( i=1; i<11; i++) {
+    if( gl_ac_calib_phsh_t[i] == 0xFF) break;
+    dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
+    if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+  }
+
+  //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
+  GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
+
+  GP1DAT |= 1 << (24 + 5);      //Конфигурация линии BIT_00 (p1.5) в качестве выхода
+  GP0DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_01 (p0.7) в качестве выхода
+  GP0DAT |= 1 << (24 + 1);      //Конфигурация линии BIT_02 (p0.1) в качестве выхода
+  GP2DAT |= 1 << (24 + 3);      //Конфигурация линии BIT_03 (p2.3) в качестве выхода
+  GP4DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_04 (p4.6) в качестве выхода
+  GP4DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_05 (p4.7) в качестве выхода
+  GP0DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_06 (p0.6) в качестве выхода
+  GP0DAT |= 1 << (24 + 2);      //Конфигурация линии BIT_07 (p0.2) в качестве выхода
+
+  //выставляем значение фазового сдвига
+  ( cNewPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
+  ( cNewPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
+  ( cNewPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
+  ( cNewPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
+  ( cNewPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
+  ( cNewPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
+  ( cNewPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
+  ( cNewPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
+
+  GP2SET = 1 << (16 + 6);       //включаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+  dbl_N1 = dbl_N1 / 2.;
+  GP2CLR = 1 << (16 + 6);       // снимаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+
+  GP1DAT &= ~( 1 << (24 + 5));  //Конфигурация линии BIT_00 (p1.5) в качестве входа
+  GP0DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_01 (p0.7) в качестве входа
+  GP0DAT &= ~( 1 << (24 + 1));  //Конфигурация линии BIT_02 (p0.1) в качестве входа
+  GP2DAT &= ~( 1 << (24 + 3));  //Конфигурация линии BIT_03 (p2.3) в качестве входа
+  GP4DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_04 (p4.6) в качестве входа
+  GP4DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_05 (p4.7) в качестве входа
+  GP0DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_06 (p0.6) в качестве входа
+  GP0DAT &= ~( 1 << (24 + 2));  //Конфигурация линии BIT_07 (p0.2) в качестве входа
+
+  GP3DAT |= 1 << (16 + 4);    //SET_PS_SH_LINE  (p3.4) = 1
+
+
 
   //**********************************************************************
   // Ожидание раскачки виброподвеса
@@ -1490,12 +1561,6 @@ void main() {
 #else
 
   //**********************************************************************
-  //ТАКТИРОВАНИЕ
-  //**********************************************************************
-  
-
-
-  //**********************************************************************
   // Ожидание первого такта TA. Если его не будет в течении 0.5 сек - включаемся в синхронный режим
   //**********************************************************************
   prt2val = T2VAL;
@@ -1613,33 +1678,41 @@ void main() {
   while( (GP0DAT & 0x10));
 #endif
 
-  //**********************************************************************
-  
-
 #ifdef DEBUG
   printf("done\n");
-
-
-  //вычисление первоначального коэффициента вычета
-  if( gl_b_SyncMode)
-    printf("DEBUG: Calculation of first decrement coefficient\n");  
 #endif
 
-/*
-  if( gl_b_SyncMode)
-    FirstDecrementCoeffCalculation();
-*/
-
+  //**********************************************************************
+  //ПЕРВОНАЧАЛЬНЫЙ КОЭФФИЦИЕНТ ВЫЧЕТА (только для асинхр. режима)
+  //**********************************************************************
+  if( gl_b_SyncMode != 0) {
 #ifdef DEBUG
-  printf("VALUE=%.2f  ", gl_ush_flashParamDecCoeff / 65535.);
+    printf("DEBUG: Decrement coefficient initial value\n");
 #endif
+    //к этому моменту у нас есть что-то зачитанное из настроек (назовём это стартовый Квычета)
+    switch( gl_cFlashParamDcCalibUsage) {
+      case 0: //для вычисления Квычета мы используем таблицу - перевычисляем
+        gl_ush_flashParamDecCoeff = gl_ush_calib_dc_dc[0];
+        for( i=1; i<11; i++) {
+          if( gl_ac_calib_dc_t[i] == 0xFF) break;
+          if( gl_dbl_Tutd1 > gl_ac_calib_dc_t[i] - 128. ) gl_ush_flashParamDecCoeff = gl_ush_calib_dc_dc[i];
+        }
+      break;
+
+      case 0xFE:  //фэйк случай - делаю и оставляю для истории
+        FirstDecrementCoeffCalculation();
+      break;
+    }
 
 #ifdef DEBUG
-  if( gl_b_SyncMode)
+    printf("VALUE=%.2f  ", gl_ush_flashParamDecCoeff / 65535.);
     printf("passed\n");
-  
-  printf("DEBUG: Configuration passed. Main loop starts!\n");
+#endif
+  }
 
+
+#ifdef DEBUG
+  printf("DEBUG: Configuration passed. Main loop starts!\n");
 #endif
 
   //инициализация переменных рассчёта скользящей средней коэффициента вычета
@@ -1780,7 +1853,7 @@ void main() {
             PrintBinShortNumber(lb);
             printf(" ");
             PrintBinShortNumber( gl_ssh_angle_inc);
-            printf(" ");
+            printf("\n");
           #endif
         #endif
 
@@ -1789,58 +1862,79 @@ void main() {
         testPike();
 
         // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // ***** // *****
-        // 2. в случае асинхр режима, запрашиваем у альтеры код счётчика информационных импульсов
+        // 2. в случае асинхр режима, запрашиваем у альтеры угол отклонения виброподвеса
         if( gl_b_SyncMode) {
+
+          #ifdef DEBUG
+          #if DEBUG == 2
+            printf( "DEBUG: AN_R...");
+          #endif
+          #endif
+
           //ждём высокого уровня сигнала готовности ANGLE_READY (p2.4)
-          while( !( GP2DAT & 0x10)) {}
+          while( !( GP2DAT & 0x10)) {
+            putchar( ( GP2DAT & 0x10) ? '1':'0');
+          }
 
-            //запрашиваем старший байт угла поворота вибратора
-            GP0SET = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 1
-            //pause( 1);                //пауза
+          #ifdef DEBUG
+          #if DEBUG == 2
+            printf( "!\nDEBUG: RDHBA\n");
+          #endif
+          #endif
 
-            //чтение
-            hb =  (( GP1DAT & BIT_5) >> 5) +
-                  ((( GP0DAT & BIT_7) >> 7) << 1) +
-                  ((( GP0DAT & BIT_1) >> 1) << 2) +
-                  ((( GP2DAT & BIT_3) >> 3) << 3) +
-                  ((( GP4DAT & BIT_6) >> 6) << 4) +
-                  ((( GP4DAT & BIT_7) >> 7) << 5) +
-                  ((( GP0DAT & BIT_6) >> 6) << 6) +
-                  ((( GP0DAT & BIT_2) >> 2) << 7);
+          //запрашиваем старший байт угла поворота вибратора
+          GP0SET = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 1
+          //pause( 1);                //пауза
 
-            GP0CLR = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 0
+          //чтение
+          hb =  (( GP1DAT & BIT_5) >> 5) +
+                ((( GP0DAT & BIT_7) >> 7) << 1) +
+                ((( GP0DAT & BIT_1) >> 1) << 2) +
+                ((( GP2DAT & BIT_3) >> 3) << 3) +
+                ((( GP4DAT & BIT_6) >> 6) << 4) +
+                ((( GP4DAT & BIT_7) >> 7) << 5) +
+                ((( GP0DAT & BIT_6) >> 6) << 6) +
+                ((( GP0DAT & BIT_2) >> 2) << 7);
+
+          GP0CLR = 1 << (16 + 3);  //RDHBANGLE (p0.3) = 0
 
 
-            //запрашиваем младший байт кода счётчика информационных импульсов
-            GP2SET = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 1
-            //pause( 1);                //пауза
+          #ifdef DEBUG
+          #if DEBUG == 2
+            printf( "DEBUG: RDLBA\n");
+          #endif
+          #endif
 
-            lb = (( GP1DAT & BIT_5) >> 5) +
-                  ((( GP0DAT & BIT_7) >> 7) << 1) +
-                  ((( GP0DAT & BIT_1) >> 1) << 2) +
-                  ((( GP2DAT & BIT_3) >> 3) << 3) +
-                  ((( GP4DAT & BIT_6) >> 6) << 4) +
-                  ((( GP4DAT & BIT_7) >> 7) << 5) +
-                  ((( GP0DAT & BIT_6) >> 6) << 6) +
-                  ((( GP0DAT & BIT_2) >> 2) << 7);
+          //запрашиваем младший байт кода счётчика информационных импульсов
+          GP2SET = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 1
+          //pause( 1);                //пауза
 
-            GP2CLR = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 0
+          lb = (( GP1DAT & BIT_5) >> 5) +
+                ((( GP0DAT & BIT_7) >> 7) << 1) +
+                ((( GP0DAT & BIT_1) >> 1) << 2) +
+                ((( GP2DAT & BIT_3) >> 3) << 3) +
+                ((( GP4DAT & BIT_6) >> 6) << 4) +
+                ((( GP4DAT & BIT_7) >> 7) << 5) +
+                ((( GP0DAT & BIT_6) >> 6) << 6) +
+                ((( GP0DAT & BIT_2) >> 2) << 7);
 
-            //складываем два байта
-            gl_ssh_angle_hanger_prev = gl_ssh_angle_hanger;
-            gl_ssh_angle_hanger = lb + (hb << 8);
+          GP2CLR = 1 << (16 + 5);  //RDLBANGLE (p2.5) = 0
 
-            if( gl_ssh_angle_hanger & 0x2000) {
-              gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF) | 0xC000;
-            }
-            else
-              gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF);
+          //складываем два байта
+          gl_ssh_angle_hanger_prev = gl_ssh_angle_hanger;
+          gl_ssh_angle_hanger = lb + (hb << 8);
 
-            /*
-            #ifdef DEBUG
-              printf("DEBUG: gl_ssh_angle_hanger = %.2f V\n", ( double) ( gl_ssh_angle_hanger) * 0.61 / 1000.);
-            #endif
-            */
+          if( gl_ssh_angle_hanger & 0x2000) {
+            gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF) | 0xC000;
+          }
+          else
+            gl_ssh_angle_hanger = ( gl_ssh_angle_hanger & 0x3FFF);
+
+          /*
+          #ifdef DEBUG
+            printf("DEBUG: gl_ssh_angle_hanger = %.2f V\n", ( double) ( gl_ssh_angle_hanger) * 0.61 / 1000.);
+          #endif
+          */
         }
 
         testPike();
@@ -1848,7 +1942,19 @@ void main() {
         //**********************************************************************
         // Получение аналогового параметра
         //**********************************************************************
+        #ifdef DEBUG
+        #if DEBUG == 2
+          printf( "DEBUG: AnPar...");
+        #endif
+        #endif
+
         while( !( ADCSTA & 0x01)){}     // ожидаем конца преобразования АЦП (теоретически когда мы приходим сюда он уже должен быть готов)
+
+        #ifdef DEBUG
+        #if DEBUG == 2
+          printf( "got\n");
+        #endif
+        #endif
 
         switch( gl_nADCChannel) { //анализируем что мы оцифровывали и сохраняем в соответствующую переменную
           case 0: //UTD3
@@ -2111,7 +2217,7 @@ void main() {
           case PH_SH_USAGE:     send_pack( gl_cFlashParamPhaseShiftUsage);       break; //калибровка фазового сдвига. использование
 
           case PH_SH_CURRENT_VAL: 
-                                send_pack( gl_cCurrentPhaseShift);               break; //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
+                                send_pack( gl_nCurrentPhaseShift);               break; //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
 
           case DC_CALIB_T:
                                 send_pack( ( gl_ac_calib_dc_t[ gl_nSentAddParamSubIndex] << 8) + gl_nSentAddParamSubIndex);
@@ -2177,21 +2283,25 @@ void main() {
           }
         }
 
+
+        #ifdef DEBUG
+        #if DEBUG == 2
+          printf( "DEBUG: DC\n");
+        #endif
+        #endif
+
         //ПЕРЕВЫЧИСЛЕНИЕ КОЭФФИЦИЕНТА ВЫЧЕТА
         switch( gl_cFlashParamDcCalibUsage) {
 
           case 0: //через использование калибровки
             if( gl_lSecondsFromStart >= gl_lCalibratedDcApplySecs) {
-              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 300;
+              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 60;
 
-              ushNewDc = gl_ush_calib_dc_dc[0];
+              gl_ush_flashParamDecCoeff = gl_ush_calib_dc_dc[0];
               for( i=1; i<11; i++) {
                 if( gl_ac_calib_dc_t[i] == 0xFF) break;
-                if( gl_dbl_Tutd1 > gl_ac_calib_dc_t[i] - 128. ) ushNewDc = gl_ush_calib_dc_dc[i];
+                if( gl_dbl_Tutd1 > gl_ac_calib_dc_t[i] - 128. ) gl_ush_flashParamDecCoeff = gl_ush_calib_dc_dc[i];
               }
-
-              if( ushNewDc != gl_ush_flashParamDecCoeff)
-                gl_ush_flashParamDecCoeff = ushNewDc;
 
             }
           break;
@@ -2407,61 +2517,94 @@ void main() {
 
         }
 
-        //ПРИМЕНЕНИЕ КАЛИБРОВКИ ФАЗОВОГО СДВИГА
-        if( gl_cFlashParamPhaseShiftUsage == 0) {
 
-          if( gl_lSecondsFromStart >= gl_lCalibratedPhaseShiftApplySecs) {
-            gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
+        #ifdef DEBUG
+        #if DEBUG == 2
+          printf( "DEBUG: PS\n");
+        #endif
+        #endif
 
-            cNewPhaseShift = gl_ac_calib_phsh_phsh[0];
-            for( i=1; i<11; i++) {
-              if( gl_ac_calib_phsh_t[i] == 0xFF) break;
-              dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
-              if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+        //ИЗМЕНЕНИЕ ФАЗОВОГО СДВИГА
+        cNewPhaseShift = gl_nCurrentPhaseShift;
+
+        switch( gl_cFlashParamPhaseShiftUsage) {
+          case 0:
+            //калибровка из таблицы
+
+            if( gl_nCurrentPhaseShift & 0x100) {
+              //пришла команда - именить ФС... изменим... засечём новые 5 мин, и потом, как дойдет таймер, опять выставим по калибровочной таблице
+              cNewPhaseShift = gl_nCurrentPhaseShift - 0x100;
+              gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
             }
+            else {
+              if( gl_lSecondsFromStart >= gl_lCalibratedPhaseShiftApplySecs) {
+                //пришло время выставиться из таблицы
+                gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
 
-            if( cNewPhaseShift != gl_cCurrentPhaseShift) {
-              gl_cCurrentPhaseShift = cNewPhaseShift;
-
-              //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
-              GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
-
-              GP1DAT |= 1 << (24 + 5);      //Конфигурация линии BIT_00 (p1.5) в качестве выхода
-              GP0DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_01 (p0.7) в качестве выхода
-              GP0DAT |= 1 << (24 + 1);      //Конфигурация линии BIT_02 (p0.1) в качестве выхода
-              GP2DAT |= 1 << (24 + 3);      //Конфигурация линии BIT_03 (p2.3) в качестве выхода
-              GP4DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_04 (p4.6) в качестве выхода
-              GP4DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_05 (p4.7) в качестве выхода
-              GP0DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_06 (p0.6) в качестве выхода
-              GP0DAT |= 1 << (24 + 2);      //Конфигурация линии BIT_07 (p0.2) в качестве выхода
-
-              //выставляем значение фазового сдвига
-              ( cNewPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
-              ( cNewPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
-              ( cNewPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
-              ( cNewPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
-              ( cNewPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
-              ( cNewPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
-              ( cNewPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
-              ( cNewPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
-
-              GP2SET = 1 << (16 + 6);       //включаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
-              for( i=0; i<100; i++);        // пауза
-              GP2CLR = 1 << (16 + 6);       // снимаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
-
-              GP1DAT &= ~( 1 << (24 + 5));  //Конфигурация линии BIT_00 (p1.5) в качестве входа
-              GP0DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_01 (p0.7) в качестве входа
-              GP0DAT &= ~( 1 << (24 + 1));  //Конфигурация линии BIT_02 (p0.1) в качестве входа
-              GP2DAT &= ~( 1 << (24 + 3));  //Конфигурация линии BIT_03 (p2.3) в качестве входа
-              GP4DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_04 (p4.6) в качестве входа
-              GP4DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_05 (p4.7) в качестве входа
-              GP0DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_06 (p0.6) в качестве входа
-              GP0DAT &= ~( 1 << (24 + 2));  //Конфигурация линии BIT_07 (p0.2) в качестве входа
-
-              GP3DAT |= 1 << (16 + 4);    //SET_PS_SH_LINE  (p3.4) = 1
+                cNewPhaseShift = gl_ac_calib_phsh_phsh[0];
+                for( i=1; i<11; i++) {
+                  if( gl_ac_calib_phsh_t[i] == 0xFF) break;
+                  dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
+                  if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+                }
+              }
             }
-          }
+          break;
+
+          case 1:
+            //ручной режим изменения (выставили и держим)
+            if( gl_nCurrentPhaseShift & 0x100) {
+              //пришла команда - обновить ФС
+              cNewPhaseShift = gl_nCurrentPhaseShift - 0x100;
+            }
+          break;
+
+          //в остальных случаях изменения фазового сдвига не происходит
         }
+
+        if( cNewPhaseShift != gl_nCurrentPhaseShift) {
+          gl_nCurrentPhaseShift = cNewPhaseShift;
+
+          //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
+          GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
+
+          GP1DAT |= 1 << (24 + 5);      //Конфигурация линии BIT_00 (p1.5) в качестве выхода
+          GP0DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_01 (p0.7) в качестве выхода
+          GP0DAT |= 1 << (24 + 1);      //Конфигурация линии BIT_02 (p0.1) в качестве выхода
+          GP2DAT |= 1 << (24 + 3);      //Конфигурация линии BIT_03 (p2.3) в качестве выхода
+          GP4DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_04 (p4.6) в качестве выхода
+          GP4DAT |= 1 << (24 + 7);      //Конфигурация линии BIT_05 (p4.7) в качестве выхода
+          GP0DAT |= 1 << (24 + 6);      //Конфигурация линии BIT_06 (p0.6) в качестве выхода
+          GP0DAT |= 1 << (24 + 2);      //Конфигурация линии BIT_07 (p0.2) в качестве выхода
+
+          //выставляем значение фазового сдвига
+          ( gl_nCurrentPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
+          ( gl_nCurrentPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
+          ( gl_nCurrentPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
+          ( gl_nCurrentPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
+          ( gl_nCurrentPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
+          ( gl_nCurrentPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
+          ( gl_nCurrentPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
+          ( gl_nCurrentPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
+
+          GP2SET = 1 << (16 + 6);       //включаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+          for( i=0; i<100; i++);        // пауза
+          GP2CLR = 1 << (16 + 6);       // снимаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
+
+          GP1DAT &= ~( 1 << (24 + 5));  //Конфигурация линии BIT_00 (p1.5) в качестве входа
+          GP0DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_01 (p0.7) в качестве входа
+          GP0DAT &= ~( 1 << (24 + 1));  //Конфигурация линии BIT_02 (p0.1) в качестве входа
+          GP2DAT &= ~( 1 << (24 + 3));  //Конфигурация линии BIT_03 (p2.3) в качестве входа
+          GP4DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_04 (p4.6) в качестве входа
+          GP4DAT &= ~( 1 << (24 + 7));  //Конфигурация линии BIT_05 (p4.7) в качестве входа
+          GP0DAT &= ~( 1 << (24 + 6));  //Конфигурация линии BIT_06 (p0.6) в качестве входа
+          GP0DAT &= ~( 1 << (24 + 2));  //Конфигурация линии BIT_07 (p0.2) в качестве входа
+
+          GP3DAT |= 1 << (16 + 4);    //SET_PS_SH_LINE  (p3.4) = 1
+        }
+
+
+
 
         //поднимаем флаг о том что текущий высокий уровень SA мы обработали
         gl_b_SA_Processed = 1;

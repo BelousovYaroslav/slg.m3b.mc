@@ -340,13 +340,13 @@ void load_params_p4( void) {
     printf("DBG:  ADDR_PHSH_CALIB_T%d:    0x%04x (%04d)\n",   i+1, gl_ac_calib_phsh_t[i], gl_ac_calib_phsh_t[i]);
     printf("DBG:  ADDR_PHSH_CALIB_PHSH%d: 0x%04x (%04d)\n\n", i+1, gl_ac_calib_phsh_phsh[i], gl_ac_calib_phsh_phsh[i]);
   }
-  printf("DBG:  PHASE_SHIFT_USAGE:      0x%04x (%04d)\n\n", i+1, gl_cFlashParamPhaseShiftUsage, gl_cFlashParamPhaseShiftUsage);
+  printf("DBG:  PHASE_SHIFT_USAGE:      0x%04x (%04d)\n\n",   gl_cFlashParamPhaseShiftUsage, gl_cFlashParamPhaseShiftUsage);
 
   for( i=0; i<11; i++) {
-    printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",   i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
-    printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n", i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
+    printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",     i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
+    printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n",   i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
   }
-  printf("DBG:  DC_CALIB_USAGE:       0x%04x (%04d)\n\n", i+1, gl_cFlashParamDcCalibUsage, gl_cFlashParamDcCalibUsage);
+  printf("DBG:  DC_CALIB_USAGE:       0x%04x (%04d)\n\n",     gl_cFlashParamDcCalibUsage, gl_cFlashParamDcCalibUsage);
 
   printf("DBG:load_params_p4(): out\n");
 #endif
