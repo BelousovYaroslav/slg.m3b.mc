@@ -2306,9 +2306,10 @@ void main() {
             }
           break;
 
-          case 1: //перевычисление на лету
+          case 2: //перевычисление на лету
 
-            if( gl_b_SyncMode && ( gl_nSentAddParamIndex != UTD2)) {
+            if( gl_b_SyncMode && gl_lSecondsFromStart) {
+
               dbl_N1 = ( double) gl_ssh_angle_inc_prev;
               dbl_N2 = ( double) gl_ssh_angle_inc;
               dbl_U1 = ( double) gl_ssh_angle_hanger_prev;

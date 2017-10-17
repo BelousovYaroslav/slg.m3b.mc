@@ -320,6 +320,78 @@ void load_params_p4( void) {
   //Использование калибровки фазового сдвига
   if( flashEE_load_short( ADDR_PHSH_CALIB_USAGE, ( unsigned short *) &gl_cFlashParamPhaseShiftUsage)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
 
+
+  //КАЛИБРОВКА КОЭФФИЦИЕНТА ВЫЧЕТА
+  //калибровка коэффициента вычета. Точка 1. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T1, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[0] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 1. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC1, ( unsigned short *) &gl_ush_calib_dc_dc[0])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 2. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T2, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[1] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 2. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC2, ( unsigned short *) &gl_ush_calib_dc_dc[1])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 3. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T3, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[2] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 3. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC3, ( unsigned short *) &gl_ush_calib_dc_dc[2])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 4. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T4, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[3] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 4. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC4, ( unsigned short *) &gl_ush_calib_dc_dc[3])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 5. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T5, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[4] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 5. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC5, ( unsigned short *) &gl_ush_calib_dc_dc[4])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 6. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T6, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[5] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 6. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC6, ( unsigned short *) &gl_ush_calib_dc_dc[5])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 7. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T7, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[6] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 7. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC7, ( unsigned short *) &gl_ush_calib_dc_dc[6])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 8. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T8, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[7] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 8. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC8, ( unsigned short *) &gl_ush_calib_dc_dc[7])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 9. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T9, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[8] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 9. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC9, ( unsigned short *) &gl_ush_calib_dc_dc[8])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 10. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T10, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[9] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 10. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC10, ( unsigned short *) &gl_ush_calib_dc_dc[9])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+  //калибровка коэффициента вычета. Точка 11. Температура.
+  if( flashEE_load_short( ADDR_DC_CALIB_T11, ( unsigned short *) &ush_tmp))    gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ac_calib_dc_t[10] = ush_tmp & 0xFF;
+  //калибровка коэффициента вычета. Точка 11. Коэффициент вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_DC11, ( unsigned short *) &gl_ush_calib_dc_dc[10])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
+
+  //Использование калибровки коэффициента вычета
+  if( flashEE_load_short( ADDR_DC_CALIB_USAGE, ( unsigned short *) &gl_cFlashParamDcCalibUsage)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+
 #ifdef DEBUG
   printf("DBG:load_params_p4()\n");
   for( i=0; i<12; i++) {

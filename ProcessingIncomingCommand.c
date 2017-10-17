@@ -214,17 +214,32 @@ void processIncomingCommand( void) {
           break;
 
           case DECCOEFF: //Set decrement coeff
-            gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+
+            if( gl_cFlashParamDcCalibUsage == 0) {
+              //режим использования калибровки. Ставим значение - и сбрасываем таймер перевычисления
+              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+
+              //засечём новую 1 мин
+              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 60;
+            }
+            else if( gl_cFlashParamDcCalibUsage == 1) {
+
+              //ручной режим. Просто ставим значение
+              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            }
+            else if( gl_cFlashParamDcCalibUsage == 2) {
+              //режим перевычисления на лету. Ставим заказанный, и сбрасываем накопленную статистику.
+              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+
+              //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
+              gl_nMeanDecCoeffCounter = 0;
+              gl_dblMeanAbsDn = 0.;
+              gl_dblMeanAbsDu = 0.;
+            }
+
             gl_nSentAddParamIndex = DECCOEFF;
-
-            //засечём новую 1 мин
-            gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 60;
-
-            //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
-            gl_nMeanDecCoeffCounter = 0;
-            gl_dblMeanAbsDn = 0.;
-            gl_dblMeanAbsDu = 0.;
           break;
+
 
           case CONTROL_I1:  //Set control_i1
             gl_ush_flashParamI1min = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
@@ -391,6 +406,11 @@ void processIncomingCommand( void) {
 
           case DC_CALIB_USAGE:    //Калибровка коэффициента вычета. Использование                      0x42  "B"
             if( gl_acInputBuffer[2] == 0x00) {
+              //заказываем использовать калибровку.
+
+              //сперва надо проверить что есть хоть одна точка в таблице калибровки
+
+              //сортируем таблицу по возрастанию температуры
               for( i=0; i<10; i++) {
                 for( j=0; j<10; j++) {
 
@@ -406,6 +426,7 @@ void processIncomingCommand( void) {
                 }
               }
 
+              //ищем первую не default-точку
               for( i=0; i<11; i++) {
                 if( gl_ac_calib_dc_t[i] != 0xFF && gl_ush_calib_dc_dc[i] != 0xFFFF) {
                   gl_cFlashParamDcCalibUsage = gl_acInputBuffer[2];
@@ -415,6 +436,7 @@ void processIncomingCommand( void) {
 
             }
             else {
+              //заказываем работать с коэффициентом вычета кроме калибровки
               gl_cFlashParamDcCalibUsage = gl_acInputBuffer[2];
             }
 
