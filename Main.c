@@ -95,9 +95,9 @@ int  gl_nSecondsT2Lock;
 
 
 //********************
-#define ADC_CHANNEL_UTD1    0
-#define ADC_CHANNEL_UTD2    1
-#define ADC_CHANNEL_UTD3    2
+#define ADC_CHANNEL_UTD3    0
+#define ADC_CHANNEL_UTD1    1
+#define ADC_CHANNEL_UTD2    2
 #define ADC_CHANNEL_I1      3
 //#define ADC_CHANNEL_I1      8
 #define ADC_CHANNEL_I2      4
@@ -155,7 +155,7 @@ double gl_dblTD3_K, gl_dblTD3_B;          //наклон и пьедестал калибровки третье
 //калибровка фазового сдвига
 char gl_ac_calib_phsh_t[11];        //массив точек температур фазового сдвига
 char gl_ac_calib_phsh_phsh[11];     //массив точек значений фазового сдвига, соответствующих температурам, описанным выше
-char gl_cFlashParamPhaseShiftUsage; //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - не используется
+char gl_cFlashParamPhaseShiftUsage; //флаг использования фазового сдвига: 0 - используется, REST (предпочитаю 0xFF) - ручной режим
 int  gl_nCurrentPhaseShift;         //текущий (последний применённый) фазовый сдвиг. 0xFF-не задействован. default startup value = 0xFF        битик 0x100 - manual set
 
 //калибровка коэффициента вычета
@@ -484,7 +484,7 @@ void configure_hanger( void) {
 void DACConfiguration( void) {
 /*
 #ifdef DEBUG
-  printf("DEBUG: DACConfiguration(): enter\n");
+  printf("DBG: DACConfiguration(): enter\n");
 #endif
 */
   //**********************************************************************
@@ -1099,7 +1099,7 @@ void main() {
   GP0CLR = (1 << 16);
 
 #ifdef DEBUG
-  printf("DEBUG: GPIO lines direction configuration...");
+  printf("DBG: GPIO lines direction configuration...");
 #endif
 
   //**********************************************************************
@@ -1130,7 +1130,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: GPIO lines values configuration...");
+  printf("DBG: GPIO lines values configuration...");
 #endif
   GP4DAT |=    1 << (16 + 0);   //ONHV            (p4.0) = 1 (выключено)
   GP4DAT &= ~( 1 << (16 + 1));  //OFF3KV          (p4.1) = 0 (включено)
@@ -1147,7 +1147,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: Pulsing Reset signal...");
+  printf("DBG: Pulsing Reset signal...");
 #endif
 
   //**********************************************************************
@@ -1160,7 +1160,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: Enabling UART0 FIQ...");
+  printf("DBG: Enabling UART0 FIQ...");
 #endif
 
   //**********************************************************************
@@ -1171,7 +1171,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: Internal ADC configuration...");
+  printf("DBG: Internal ADC configuration...");
 #endif
 
   //**********************************************************************
@@ -1194,7 +1194,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: Timers configuration...");
+  printf("DBG: Timers configuration...");
 #endif
 
   //**********************************************************************
@@ -1234,7 +1234,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: FlashEE configuration...");
+  printf("DBG: FlashEE configuration...");
 #endif
 
   //**********************************************************************
@@ -1244,7 +1244,7 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: loading flash params.\n");
+  printf("DBG: loading flash params.\n");
 #endif
 
   //**********************************************************************
@@ -1254,7 +1254,7 @@ void main() {
   ThermoCalibrationCalculation();
 
 #ifdef DEBUG
-  printf("DEBUG: DAC Configuration...");
+  printf("DBG: DAC Configuration...");
 #endif
 
   //Сброс счётчика секунд от начала работы прибора
@@ -1290,36 +1290,62 @@ void main() {
 
 #ifdef DEBUG
   printf("done\n");
-  printf("DEBUG: Hangerup configure...");
+  printf("DBG: Hangerup configure...");
 #endif
 
   //**********************************************************************
   // Конфигурация ошумления подвеса (TactNoise0 и TactNoise1)
   //**********************************************************************
   configure_hanger();
-
+#ifdef DEBUG
+  printf("done\n");
+  printf("DBG: Hangerup vibration on...\n");
+#endif
 
   //**********************************************************************
   // ВКЛЮЧЕНИЕ ВИБРОПОДВЕСА
   //**********************************************************************
   GP2DAT |= ( 1 << (16 + 2));  //EN_VB   (p2.2) = 1
 
+#ifdef DEBUG
+  printf("DBG: Start temperature...");
+#endif
 
   //**********************************************************************
   //ОПРЕДЕЛЕНИЕ ТЕМПЕРАТУРЫ TD1 (дальше может использоваться в получении значений для калибровок по температуре)
   //**********************************************************************
+  time = 0;
   ADCCP = ADC_CHANNEL_UTD1;
-  ADCCON |= 0x80;
-  while (!( ADCSTA & 0x01)){}
+  pause( 10);
+  do {
+    ADCCON |= 0x80;
+    while (!( ADCSTA & 0x01)){}
 
-  gl_ssh_Utd1 = (ADCDAT >> 16);
-  gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
+    gl_ssh_Utd1 = (ADCDAT >> 16);
+    gl_dbl_Tutd1 = -1481.96 + sqrt( 2.1962e6 + ( ( 1.8639 - ( double) gl_ssh_Utd1 / 4096. * 2.5) / 3.88e-6));
   /*
   #ifdef DEBUG
-    printf("DEBUG: ADC0 = %.02f V\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5);
+    printf("DBG: ADC0 = %.02f V\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5);
   #endif
   */
 
+    #ifdef DEBUG
+      printf("%.2f  ", gl_dbl_Tutd1);
+    #endif
+
+    if( ((++time) % 1000) == 0) {
+      gl_nSentAddParamIndex = UTD1;
+      send_pack( gl_ssh_Utd1);
+    }
+
+    if( gl_dbl_Tutd1 >= -40 && gl_dbl_Tutd1 <= 60)
+      break;
+
+  } while( 1);
+
+#ifdef DEBUG
+  printf("\nDBG: Setting start phase shift\n");
+#endif
 
   //**********************************************************************
   //СТАРТОВАЯ ВЫСТАВКА ФАЗОВОГО СДВИГА
@@ -1329,11 +1355,28 @@ void main() {
   if( cNewPhaseShift == 0xFF)
     cNewPhaseShift = 75;
 
+  #ifdef DEBUG
+  printf( "DBG: START_PSSH: BEFORE CYCLE: i: %02d   cNewPhaseShift=%d\n", i, cNewPhaseShift);
+  #endif
+
   for( i=1; i<11; i++) {
     if( gl_ac_calib_phsh_t[i] == 0xFF) break;
-    dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
-    if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+    dblTdCalib = (( unsigned char) gl_ac_calib_phsh_t[i]) - 128.;
+    if( gl_dbl_Tutd1 > dblTdCalib)
+      cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+
+    #ifdef DEBUG
+      printf( "DBG: START_PSSH: IN CYCLE: i: %02d   gl_dbl_Tutd1=%.02f   dblTdCalib=%.02f   cNewPhaseShift=%d\n", i, gl_dbl_Tutd1, dblTdCalib, cNewPhaseShift);
+    #endif
   }
+
+  gl_nCurrentPhaseShift = cNewPhaseShift;
+
+  #ifdef DEBUG
+  printf( "DBG: START_PSSH: AFTER CYCLE: i: %02d   cNewPhaseShift=0x%02X   gl_n=0x%X\n", i, cNewPhaseShift, gl_nCurrentPhaseShift);
+  #endif
+
+
 
   //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
   GP3DAT &= ~( 1 << (16 + 4));  //SET_PS_SH_LINE  (p3.4) = 0
@@ -1348,14 +1391,14 @@ void main() {
   GP0DAT |= 1 << (24 + 2);      //Конфигурация линии BIT_07 (p0.2) в качестве выхода
 
   //выставляем значение фазового сдвига
-  ( cNewPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
-  ( cNewPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
-  ( cNewPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
-  ( cNewPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
-  ( cNewPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
-  ( cNewPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
-  ( cNewPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
-  ( cNewPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
+  ( gl_nCurrentPhaseShift & 0x01) ? GP1DAT |= 1 << (16 + 5) : GP1DAT &= ~( 1 << (16 + 5));
+  ( gl_nCurrentPhaseShift & 0x02) ? GP0DAT |= 1 << (16 + 7) : GP0DAT &= ~( 1 << (16 + 7));
+  ( gl_nCurrentPhaseShift & 0x04) ? GP0DAT |= 1 << (16 + 1) : GP0DAT &= ~( 1 << (16 + 1));
+  ( gl_nCurrentPhaseShift & 0x08) ? GP2DAT |= 1 << (16 + 3) : GP2DAT &= ~( 1 << (16 + 3));
+  ( gl_nCurrentPhaseShift & 0x10) ? GP4DAT |= 1 << (16 + 6) : GP4DAT &= ~( 1 << (16 + 6));
+  ( gl_nCurrentPhaseShift & 0x20) ? GP4DAT |= 1 << (16 + 7) : GP4DAT &= ~( 1 << (16 + 7));
+  ( gl_nCurrentPhaseShift & 0x40) ? GP0DAT |= 1 << (16 + 6) : GP0DAT &= ~( 1 << (16 + 6));
+  ( gl_nCurrentPhaseShift & 0x80) ? GP0DAT |= 1 << (16 + 2) : GP0DAT &= ~( 1 << (16 + 2));
 
   GP2SET = 1 << (16 + 6);       //включаем флаг SET_PS_SH_ACT (pin36 = p2.6) - заберите новый фазовый сдвиг
   dbl_N1 = dbl_N1 / 2.;
@@ -1378,36 +1421,35 @@ void main() {
   // Ожидание раскачки виброподвеса
   //**********************************************************************
 #ifdef DEBUG
-  printf("done\n");
-  printf("DEBUG: Hangerup vibration control...\n");
+  printf("DBG: Hangerup vibration control...\n");
 #endif
 
 #ifdef SKIP_START_CHECKS
   #ifdef DEBUG
     pause( 16384*1);      //0.5 sec pause
-    printf("DEBUG: Hangerup vibration control: SKIPPED\n");
+    printf("DBG: Hangerup vibration control: SKIPPED\n");
   #endif
 #else
 
   dStartAmplAngCheck = ( double) gl_ush_flashParamAmplAngMin1 / 65535. * 3.;
   //dStartAmplAngCheck = 0.25;
   prt2val = T2VAL;
-  ADCCP = 0x06;   //AmplAng channel
+  ADCCP = ADC_CHANNEL_AA;   //AmplAng channel
   while( 1) {
     ADCCON |= 0x80;
     while (!( ADCSTA & 0x01)){}
     gl_ssh_ampl_angle = (ADCDAT >> 16);
   /*
   #ifdef DEBUG
-    printf("DEBUG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
+    printf("DBG: Hangerup vibration control: AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
   #endif
   */
     if( ( ( double) gl_ssh_ampl_angle / 4095. * 2.5) > dStartAmplAngCheck) {
       //SUCCESS
 
       #ifdef DEBUG
-        //printf("DEBUG: Hangerup vibration control: successfully passed\n");
-        printf("DEBUG: Hangerup vibration control: successfully passed with AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
+        //printf("DBG: Hangerup vibration control: successfully passed\n");
+        printf("DBG: Hangerup vibration control: successfully passed with AA: %.02f    CONTROL: %.02f\n", ( double) gl_ssh_ampl_angle / 4095. * 2.5, dStartAmplAngCheck );
       #endif
 
       break;
@@ -1418,7 +1460,7 @@ void main() {
 
     if( ( double) (( prt2val + T2LD - T2VAL) % T2LD) / 32768. > 5.0) {
       #ifdef DEBUG
-        printf("DEBUG: Hangerup vibration control: FAILED\n");
+        printf("DBG: Hangerup vibration control: FAILED\n");
       #endif
      deadloop_no_hangerup();
     }
@@ -1429,13 +1471,13 @@ void main() {
   // ПОДЖИГ ЛАЗЕРА
   //**********************************************************************
 #ifdef DEBUG
-  printf("DEBUG: Laser fireup...\n");
+  printf("DBG: Laser fireup...\n");
 #endif
 
 #ifdef SKIP_START_CHECKS
   #ifdef DEBUG
     pause( 16384*1);      //0.5 sec pause
-    printf("DEBUG: Laser fireup: SKIPPED\n");
+    printf("DBG: Laser fireup: SKIPPED\n");
   #endif
 #else
 
@@ -1469,11 +1511,11 @@ void main() {
         ( ( double) gl_ssh_current_2 / 4096. * 3. / 3.973 < ( double) gl_ush_flashParamI2min / 65535. * 0.75)) {*/
 
 #ifdef DEBUG
-  printf("DEBUG: Laser fireup: code=0x%04x   I1=%.02f   CONTROL=%.02f\n",
+  printf("DBG: Laser fireup: code=0x%04x   I1=%.02f   CONTROL=%.02f\n",
             gl_ssh_current_1,
             ( 2.5 - ( double) gl_ssh_current_1 / 4096. * 2.5) / 2.5,
             ( double) gl_ush_flashParamI1min / 65535. * 0.75);
-  printf("DEBUG: Laser fireup: code=0x%04x   I2=%.02f   CONTROL=%.02f\n",
+  printf("DBG: Laser fireup: code=0x%04x   I2=%.02f   CONTROL=%.02f\n",
             gl_ssh_current_2,
             ( 2.5 - ( double) gl_ssh_current_2 / 4096. * 2.5) / 2.5,
             ( double) gl_ush_flashParamI2min / 65535. * 0.75);
@@ -1498,7 +1540,7 @@ void main() {
           GP4DAT |= ( 1 << (16 + 1));   //OFF3KV (p4.1) = 1
 
           #ifdef DEBUG
-            printf("DEBUG: Laser fireup: FAILED\n");
+            printf("DBG: Laser fireup: FAILED\n");
           #endif
 
           deadloop_no_firing( ERROR_NO_LASER_FIRING);
@@ -1522,7 +1564,7 @@ void main() {
       GP4DAT |= 1 << (16 + 1);	    //OFF3KV (p4.1) = 1     (отключаем поджиг)
 
       #ifdef DEBUG
-        printf("DEBUG: Laser fireup: successfully passed\n");
+        printf("DBG: Laser fireup: successfully passed\n");
       #endif
 
       break;
@@ -1546,7 +1588,7 @@ void main() {
   //**********************************************************************
 
 #ifdef DEBUG
-  printf("DEBUG: Tacting signal check...\n");
+  printf("DBG: Tacting signal check...\n");
 #endif
 
 #ifdef SKIP_START_CHECKS
@@ -1555,7 +1597,7 @@ void main() {
   #ifdef DEBUG
     pause( 16384*1);      //0.5 sec pause
     printf("SKIPPED\n");
-    printf("DEBUG: Working in asynchronous mode\n");
+    printf("DBG: Working in asynchronous mode\n");
   #endif
 
 #else
@@ -1582,7 +1624,7 @@ void main() {
       if( GP2DAT & 0x80) {
         gl_b_SyncMode = 1;
         #ifdef DEBUG
-          printf("DEBUG: Got 1-0-1 on P2.7 so working in asynchronous mode\n");
+          printf("DBG: Got 1-0-1 on P2.7 so working in asynchronous mode\n");
         #endif
 
         GP3DAT |= ( 1 << (16 + 5));   //OutLnfType (p3.5) = 1  получается асинхронное тактирование
@@ -1595,7 +1637,7 @@ void main() {
     if( ( double) (( prt2val + T2LD - T2VAL) % T2LD) / 32768. > 0.5) {
 
       #ifdef DEBUG
-        printf("DEBUG: 0.5 sec passed. Zeroing I/O pin 39 (p3.5)...");
+        printf("DBG: 0.5 sec passed. Zeroing I/O pin 39 (p3.5)...");
       #endif
 
       GP3DAT &= ~(1 << (16 + 5));     //OutInfType (p3.5) = 0    получается синхронное тактирование
@@ -1613,8 +1655,8 @@ void main() {
   if( !gl_b_SyncMode) {
     //мы переключились в синхронный режим - надо бы проверить вообще тактирование (даже SA)
     #ifdef DEBUG
-      printf("DEBUG: Passed 0.5 sec with TA (P2.7) with no changes. So working in synchronous mode\n");
-      printf("DEBUG: Waiting for SA signal on p0.4\n");
+      printf("DBG: Passed 0.5 sec with TA (P2.7) with no changes. So working in synchronous mode\n");
+      printf("DBG: Waiting for SA signal on p0.4\n");
     #endif
 
     //работаем в синхронном режиме - проверка наличия SA
@@ -1624,7 +1666,7 @@ void main() {
       if( GP0DAT & 0x10) {
         //SA пришел - все ОК
         #ifdef DEBUG
-          printf("DEBUG: Got SA signal! SA TEST PASSED\n");
+          printf("DBG: Got SA signal! SA TEST PASSED\n");
         #endif
         break;
       }
@@ -1651,7 +1693,7 @@ void main() {
 
   #ifdef DEBUG
     printf("passed\n");
-    printf("DEBUG: Internal ADC start...");
+    printf("DBG: Internal ADC start...");
   #endif
 
 #endif
@@ -1666,7 +1708,7 @@ void main() {
 
 #ifdef DEBUG
   printf("passed\n");
-  printf("DEBUG: Skipping first SA Tact...");
+  printf("DBG: Skipping first SA Tact...");
 #endif
 
   //**********************************************************************  
@@ -1687,7 +1729,7 @@ void main() {
   //**********************************************************************
   if( gl_b_SyncMode != 0) {
 #ifdef DEBUG
-    printf("DEBUG: Decrement coefficient initial value\n");
+    printf("DBG: Decrement coefficient initial value\n");
 #endif
     //к этому моменту у нас есть что-то зачитанное из настроек (назовём это стартовый Квычета)
     switch( gl_cFlashParamDcCalibUsage) {
@@ -1712,7 +1754,7 @@ void main() {
 
 
 #ifdef DEBUG
-  printf("DEBUG: Configuration passed. Main loop starts!\n");
+  printf("DBG: Configuration passed. Main loop starts!\n");
 #endif
 
   //инициализация переменных рассчёта скользящей средней коэффициента вычета
@@ -1786,7 +1828,7 @@ void main() {
     if( GP0DAT & 0x10) {	//на ноге SA_TA (P0.4) есть сигнал
       /*
       #ifdef DEBUG
-        printf("DEBUG: got tact synchro signal! %d\n", gl_b_SA_Processed);
+        printf("DBG: got tact synchro signal! %d\n", gl_b_SA_Processed);
       #endif
       */
       if( gl_b_SA_Processed == 0) { //если в этом SA цикле мы его еще не обрабатывали
@@ -1867,7 +1909,7 @@ void main() {
 
           #ifdef DEBUG
           #if DEBUG == 2
-            printf( "DEBUG: AN_R...");
+            printf( "DBG: AN_R...");
           #endif
           #endif
 
@@ -1901,7 +1943,7 @@ void main() {
 
           #ifdef DEBUG
           #if DEBUG == 2
-            printf( "DEBUG: RDLBA\n");
+            printf( "DBG: RDLBA\n");
           #endif
           #endif
 
@@ -1932,7 +1974,7 @@ void main() {
 
           /*
           #ifdef DEBUG
-            printf("DEBUG: gl_ssh_angle_hanger = %.2f V\n", ( double) ( gl_ssh_angle_hanger) * 0.61 / 1000.);
+            printf("DBG: gl_ssh_angle_hanger = %.2f V\n", ( double) ( gl_ssh_angle_hanger) * 0.61 / 1000.);
           #endif
           */
         }
@@ -1944,7 +1986,7 @@ void main() {
         //**********************************************************************
         #ifdef DEBUG
         #if DEBUG == 2
-          printf( "DEBUG: AnPar...");
+          printf( "DBG: AnPar...");
         #endif
         #endif
 
@@ -2286,7 +2328,7 @@ void main() {
 
         #ifdef DEBUG
         #if DEBUG == 2
-          printf( "DEBUG: DC\n");
+          printf( "DBG: DC\n");
         #endif
         #endif
 
@@ -2521,7 +2563,7 @@ void main() {
 
         #ifdef DEBUG
         #if DEBUG == 2
-          printf( "DEBUG: PS\n");
+          printf( "DBG: PS  cNew 0x%02X  gl_n 0x%X\n", cNewPhaseShift, gl_nCurrentPhaseShift);
         #endif
         #endif
 
@@ -2536,6 +2578,12 @@ void main() {
               //пришла команда - именить ФС... изменим... засечём новые 5 мин, и потом, как дойдет таймер, опять выставим по калибровочной таблице
               cNewPhaseShift = gl_nCurrentPhaseShift - 0x100;
               gl_lCalibratedPhaseShiftApplySecs = gl_lSecondsFromStart + 300;
+
+              #ifdef DEBUG
+              #if DEBUG == 2
+                printf( "DBG: PS : use calib  : but command accepted :   cNew = 0x%02X gl_n=0x%X\n", cNewPhaseShift, gl_nCurrentPhaseShift);
+              #endif
+              #endif
             }
             else {
               if( gl_lSecondsFromStart >= gl_lCalibratedPhaseShiftApplySecs) {
@@ -2545,9 +2593,16 @@ void main() {
                 cNewPhaseShift = gl_ac_calib_phsh_phsh[0];
                 for( i=1; i<11; i++) {
                   if( gl_ac_calib_phsh_t[i] == 0xFF) break;
-                  dblTdCalib = gl_ac_calib_phsh_t[i] - 128.;
-                  if( gl_dbl_Tutd1 > dblTdCalib ) cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
+                  dblTdCalib = (( unsigned char) gl_ac_calib_phsh_t[i]) - 128.;
+                  if( gl_dbl_Tutd1 > dblTdCalib )
+                    cNewPhaseShift = gl_ac_calib_phsh_phsh[i];
                 }
+
+                #ifdef DEBUG
+                #if DEBUG == 2
+                  printf( "DBG: PS : use calib  : time! :   cNew = 0x%02X gl_n=0x%X\n", cNewPhaseShift, gl_nCurrentPhaseShift);
+                #endif
+                #endif
               }
             }
           break;
@@ -2557,6 +2612,12 @@ void main() {
             if( gl_nCurrentPhaseShift & 0x100) {
               //пришла команда - обновить ФС
               cNewPhaseShift = gl_nCurrentPhaseShift - 0x100;
+
+              #ifdef DEBUG
+              #if DEBUG == 2
+                printf( "DBG: PS : manual regime: :   cNew = 0x%02X gl_n=0x%X\n", cNewPhaseShift, gl_nCurrentPhaseShift);
+              #endif
+              #endif
             }
           break;
 
@@ -2564,6 +2625,12 @@ void main() {
         }
 
         if( cNewPhaseShift != gl_nCurrentPhaseShift) {
+          #ifdef DEBUG
+          #if DEBUG == 2
+            printf( "DBG: PS : cnew.ne.gl_n!    cNew = 0x%02X gl_n=0x%X\n", cNewPhaseShift, gl_nCurrentPhaseShift);
+          #endif
+          #endif
+
           gl_nCurrentPhaseShift = cNewPhaseShift;
 
           //переключаем направление передачи данных по шине от микроконтроллера к альтере (pin38 -> 0)
@@ -2614,7 +2681,7 @@ void main() {
       }
 /*
 #ifdef DEBUG
-  printf("DEBUG: Main loop ends... %d %d \n", gl_nSentPacksCounter, gl_b_SA_Processed);
+  printf("DBG: Main loop ends... %d %d \n", gl_nSentPacksCounter, gl_b_SA_Processed);
 #endif
 */
     }
@@ -2631,7 +2698,7 @@ void main() {
         //пропало тактирование
 
         #ifdef DEBUG
-          printf("DEBUG: Tact signal lost!");
+          printf("DBG: Tact signal lost!");
         #endif
 
         //отключаем горение

@@ -40,7 +40,7 @@ extern void load_params( void);
 void deadloop_no_tact( int nError) {
   //ОБРАБОТКА ОТСУТСТВИЯ ТАКТИРОВАНИЯ
 #ifdef DEBUG
-  printf("DEBUG: NO TACT SIGNAL! DEADLOOP.\n");
+  printf("DBG: NO TACT SIGNAL! DEADLOOP.\n");
 #endif
   //выставляем код ошибки
   gl_c_EmergencyCode = nError;
