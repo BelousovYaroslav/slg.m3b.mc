@@ -1261,7 +1261,7 @@ void main() {
   gl_lSecondsFromStart = 0;
   gl_l5SecPrevValue = 0;
   gl_nSecondsT2Lock = T2VAL;
-  gl_lCalibratedPhaseShiftApplySecs = 0;
+  gl_lCalibratedPhaseShiftApplySecs = 1;
   gl_lCalibratedDcApplySecs = 0;
 
   //**********************************************************************
