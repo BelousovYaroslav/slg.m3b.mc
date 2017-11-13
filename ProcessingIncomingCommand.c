@@ -64,6 +64,7 @@ extern int gl_snMeaningShift;                       //Amplitude control module: 
 extern long gl_lnMeaningSumm;                       //Amplitude control module: summ of amplitudes
 extern long gl_lnMeanImps;                          //Amplitude control module: mean (it's calculated shifted by 4 i.e. multiplied by 16)
 extern int  gl_nActiveRegulationT2;                 //Amplitude control module: amplitude active regulation T2 intersection
+extern char gl_cAmplRegulation;                     //Amplitude control module: amplitude regulation state (0=manual, 1=soft regulation,2=active regulation)
 
 //Флаги
 extern char gl_b_SyncMode;                          //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
@@ -173,6 +174,7 @@ void processIncomingCommand( void) {
             gl_lnMeanImps = 0;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
@@ -184,6 +186,7 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = TACT_CODE;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
@@ -197,6 +200,7 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = M_COEFF;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
           break;
@@ -441,6 +445,18 @@ void processIncomingCommand( void) {
             }
 
             gl_nSentAddParamIndex = DC_CALIB_USAGE;
+          break;
+
+          case RULA:    //RULA
+            if( gl_cAmplRegulation == 0) {
+              gl_un_RULAControl = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            }
+          break;
+
+          case AMPL_HOLD_ACTIVE:
+            if( gl_acInputBuffer[2] >= 0 && gl_acInputBuffer[2] <= 2) {
+              gl_cAmplRegulation = gl_acInputBuffer[2];
+            }
           break;
         }
       break;

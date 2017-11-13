@@ -170,6 +170,7 @@ int  gl_snMeaningShift = 7;                 //степень - насколько сдвигать сумму
 long gl_lnMeaningSumm = 0;                  //сумма амплитуд
 long gl_lnMeanImps = 0;                     //средн€€ амплитуда (в импульсах интерф. картинки)
 int  gl_nActiveRegulationT2 = 0;            //отсечка таймера дл€ сброса флага активной регулировки амплитуды, он же флаг включенного состо€ни€
+char gl_cAmplRegulation = 2;                //флаг регулировки амплитуды: 0 - ручной режим, 1 - слаба€ регулировка, 2 - сильна€ регулировка
 
 //ѕеременные участвующие в рассчЄте коэффициента вычета "на лету"
 double gl_dblMeanAbsDn;
@@ -1792,6 +1793,7 @@ void main() {
   //**********************************************************************
 
   //включаем флаг активной регулировки амплитуды (старт прибора)
+  gl_cAmplRegulation = 2;
   gl_nActiveRegulationT2 = T2VAL;
   if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
   gl_un_RULAControl = 2457;    //2457 = 1.500 V
@@ -2239,7 +2241,7 @@ void main() {
 
           case AMPL_HOLD_MEAN:  send_pack( gl_lnMeanImps);              break; //amplitude hold algoryhtm: mean
           case AMPL_HOLD_ROUND: send_pack( gl_snMeaningCounterRound);   break; //amplitude hold algoryhtm: round
-          case AMPL_HOLD_ACTIVE:send_pack( gl_nActiveRegulationT2?1:0); break; //amplitude hold algoryhtm: falg of active regulation
+          case AMPL_HOLD_ACTIVE:send_pack( gl_cAmplRegulation);         break; //amplitude hold algoryhtm: flag of active regulation
 
           case SECONDS_FROM_START: send_pack( gl_lSecondsFromStart & 0xFFFF);    break; //From start seconds timer
 
@@ -2424,30 +2426,32 @@ void main() {
             //и делением на масштабный коэффициент 2,9 мы получаем число импульсов
             //gl_dMeanImps = gl_dMeaningSumm / ( double) gl_snMeaningCounterRound / 4095. * 2.5 / 2.2 * 120. / 2.9;
 
-            if( abs( gl_lnMeanImps - ( gl_ush_flashParamAmplitudeCode << 4)) > 1) {    //то есть амплитуду не трогаем если средн€€ не дальше 1/16 от заданной
-              if( gl_lnMeanImps > ( gl_ush_flashParamAmplitudeCode << 4)) {
+            if( gl_cAmplRegulation != 0) {
+              if( abs( gl_lnMeanImps - ( gl_ush_flashParamAmplitudeCode << 4)) > 1) {    //то есть амплитуду не трогаем если средн€€ не дальше 1/16 от заданной
+                if( gl_lnMeanImps > ( gl_ush_flashParamAmplitudeCode << 4)) {
 
-                //gl_un_RULAControl -= gl_nDelta;
+                  //gl_un_RULAControl -= gl_nDelta;
 
-                if( gl_nDelta >= gl_un_RULAControl) {
-                  //delta = cRULAControl;
-                  gl_un_RULAControl = gl_un_RULAControl / 2;
+                  if( gl_nDelta >= gl_un_RULAControl) {
+                    //delta = cRULAControl;
+                    gl_un_RULAControl = gl_un_RULAControl / 2;
+                  }
+                  else
+                    gl_un_RULAControl -= gl_nDelta;
+
                 }
-                else
-                  gl_un_RULAControl -= gl_nDelta;
+                if( gl_lnMeanImps < ( gl_ush_flashParamAmplitudeCode << 4)) {
 
-              }
-              if( gl_lnMeanImps < ( gl_ush_flashParamAmplitudeCode << 4)) {
+                  //gl_un_RULAControl += gl_nDelta;
 
-                //gl_un_RULAControl += gl_nDelta;
+                  if( gl_un_RULAControl + gl_nDelta > RULA_MAX) {
+                    //delta = 255 - cRULAControl;
+                    gl_un_RULAControl = ( RULA_MAX + gl_un_RULAControl) / 2;
+                  }
+                  else
+                    gl_un_RULAControl += gl_nDelta;
 
-                if( gl_un_RULAControl + gl_nDelta > RULA_MAX) {
-                  //delta = 255 - cRULAControl;
-                  gl_un_RULAControl = ( RULA_MAX + gl_un_RULAControl) / 2;
                 }
-                else
-                  gl_un_RULAControl += gl_nDelta;
-
               }
             }
 
@@ -2477,36 +2481,39 @@ void main() {
 
             //рабочий режим (после подстройки амплитудой) тут мы подстраиваемс€ временем
             //2014.10.09 - добавил что если больша€ разница - подстроим и приращением
-            
-            if( gl_nActiveRegulationT2 != 0) {
-              if( gl_nDelta < 10) {
-                //активна€ регулировка амплитуды
-                if(      abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 200; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 100; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 50;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 25;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 12;  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else                                                                        {                  gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
-              }
-            }
-            else {
-              //регулировка амплитуды в процессе работы прибора
-              if( gl_nDelta == 1) {
+            switch( gl_cAmplRegulation) {
+              case 1: //слаба€ регулировка (регулировка в процессе работы прибора)
+                if( gl_nDelta == 1) {
+                  if(      abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 64; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 32; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 16; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 8;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 4;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else                                                                        {                 gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+                }
+              break;
 
-                if(      abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 64; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 32; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 16; gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 8;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 4;  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                 gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
-                else                                                                        {                 gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
-              }
+              case 2: //сильна€ регулировка (включение прибора, переход на новую амплитуду и т.п.)
+                if( gl_nDelta < 10) {
+                  if(      abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 160){ gl_nDelta = 200; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 90) { gl_nDelta = 100; gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 16) { gl_nDelta = 50;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 14) { gl_nDelta = 25;  gl_snMeaningCounterRound = 128;  gl_snMeaningShift = 7; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 13) { gl_nDelta = 12;  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 11) {                  gl_snMeaningCounterRound = 256;  gl_snMeaningShift = 8; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) > 10) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else if( abs( ( gl_ush_flashParamAmplitudeCode << 4) - gl_lnMeanImps) >  8) {                  gl_snMeaningCounterRound = 512;  gl_snMeaningShift = 9; }
+                  else                                                                        {                  gl_snMeaningCounterRound = 1024; gl_snMeaningShift = 10; }
+                }
+              break;
+
+              default: //no regulation (ручной режим - RULA мен€етс€ только с команды
+              break;
             }
+
           }
 
           gl_lnMeaningSumm = 0;
@@ -2522,7 +2529,9 @@ void main() {
         //**********************************************************************
         if( gl_nActiveRegulationT2 != 0) {
           if( (( T2LD + gl_nActiveRegulationT2 - T2VAL) % T2LD) > 32768. * 10.0) {    //длительность фазы активной регулировки амплитуды 10 сек
+            //переходим к плавной регулировке амплитуды
             gl_nActiveRegulationT2 = 0;
+            gl_cAmplRegulation = 1;
           }
         }
 
