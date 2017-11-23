@@ -12,12 +12,14 @@
 extern char gl_acInputBuffer[];                     //буфер входящих команд
 extern char gl_cPos_in_in_buf;                      //позиция записи в буфере входящих команд
 
+extern unsigned short gl_ushCurrentDecCoeff;        //текущий коэффициент вычета
+
 //ПАРАМЕТРЫ ХРАНИМЫЕ ВО ФЛЭШ-ПАМЯТИ
 extern unsigned short gl_ush_flashParamAmplitudeCode;      //амплитуда колебаний виброподвеса
 extern unsigned short gl_ush_flashParamTactCode;           //код такта ошумления
 extern unsigned short gl_ush_flashParamMCoeff;             //коэффициент ошумления
 extern unsigned short gl_ush_flashParamStartMode;          //начальная мода Системы Регулировки Периметра
-extern unsigned short gl_ush_flashParamDecCoeff;           //коэффициент вычета
+extern unsigned short gl_ush_flashParamStartDecCoeff;      //стартовый коэффициент вычета
 extern unsigned short gl_ush_flashLockDev;                 //флаг блокировки устройства
 
 extern unsigned short gl_ush_flashParamI1min;       //контрольное значение тока поджига I1
@@ -48,10 +50,15 @@ extern int  gl_nCurrentPhaseShift;                  //текущий (последний применё
 extern unsigned short gl_ushFlashParamLastRULA;     //последнее RULA (obsolete)
 extern unsigned short gl_ushFlashParamLastRULM;     //последнее RULM (obsolete)
 
+
 //калибровка коэффициента вычета
 extern char gl_ac_calib_dc_t[];                     //массив точек температур калибровки коэффициента вычета
 extern unsigned short gl_ush_calib_dc_dc[];         //массив точек значений коэффициента вычета, соответствующих температурам, описанным выше
-extern char gl_cFlashParamDcCalibUsage;             //флаг использования калибровки коэффициента вычета: 0 - используется калибровка, 1 - используется перевычисление, REST (предпочитаю 0xFF) - не используется
+
+extern unsigned char  gl_ucDcUsageStartSetting;     //флаг что брать в качестве стартового Квычета: 0=DC_START; REST=по таблице калибровки;
+extern unsigned char  gl_ucDcUsageRecalc;           //флаг как перевычислять Квычета: 0=перевычисление;1=по таблице калибровки(грубо);2=по таблице калибровки(аппрокс);REST=ручной режим;
+extern unsigned short gl_ushDcUsageRecalcPeriod;    //период перевычисления Квычета (в секундах)
+
 
 //засечки таймеров
 extern int gl_nRppTimerT2;                          //засечка таймера для проведения сброса интегратора Системы Регулировки Периметра
@@ -106,7 +113,7 @@ extern unsigned short gl_aushListOutputAddParams[];
 void processIncomingCommand( void) {
   short in_param_temp;
   int i, j;
-  char c_t, c_phsh;
+  char c_t, c_phsh, c_cnt;
   unsigned short ush_dc;
 
   //**********************************************************************
@@ -160,6 +167,7 @@ void processIncomingCommand( void) {
 #endif
 
     switch( gl_acInputBuffer[0]) {
+      //**************************************************************************** SET
       case MC_COMMAND_SET:
         switch( gl_acInputBuffer[1]) {
           case AMPLITUDE:   //Set Amplitude of Hangreup Vibration
@@ -213,23 +221,23 @@ void processIncomingCommand( void) {
             DACConfiguration();
           break;
 
-          case DECCOEFF: //Set decrement coeff
+          case DECCOEFF_CURRENT: //Set decrement coeff (ТЕКУЩИЙ!)
 
-            if( gl_cFlashParamDcCalibUsage == 0) {
+            if( gl_ucDcUsageRecalc == 1 || gl_ucDcUsageRecalc == 2) {
               //режим использования калибровки. Ставим значение - и сбрасываем таймер перевычисления
-              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+              gl_ushCurrentDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
 
               //засечём новую 1 мин
-              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + 60;
+              gl_lCalibratedDcApplySecs = gl_lSecondsFromStart + gl_ushDcUsageRecalcPeriod;
             }
-            else if( gl_cFlashParamDcCalibUsage == 1) {
+            else if( gl_ucDcUsageRecalc == 3) {
 
               //ручной режим. Просто ставим значение
-              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+              gl_ushCurrentDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
             }
-            else if( gl_cFlashParamDcCalibUsage == 2) {
+            else if( gl_ucDcUsageRecalc == 0) {
               //режим перевычисления на лету. Ставим заказанный, и сбрасываем накопленную статистику.
-              gl_ush_flashParamDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+              gl_ushCurrentDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
 
               //сбросим количество информации накопленное для пересчёта Кв "НА ЛЕТУ"
               gl_nMeanDecCoeffCounter = 0;
@@ -237,7 +245,7 @@ void processIncomingCommand( void) {
               gl_dblMeanAbsDu = 0.;
             }
 
-            gl_nSentAddParamIndex = DECCOEFF;
+            gl_nSentAddParamIndex = DECCOEFF_CURRENT;
           break;
 
 
@@ -391,25 +399,73 @@ void processIncomingCommand( void) {
 
           case DC_CALIB_T:        //Калибровка коэффициента вычета. Точка N. Температура            0x3F  "?"
             gl_ac_calib_dc_t[ gl_acInputBuffer[2]] = gl_acInputBuffer[3];
-            gl_cFlashParamDcCalibUsage = 0xFF;
+            //reset setting: при старте брать DC_START, а перевычислять на лету
+            gl_ucDcUsageStartSetting = 0;
+            gl_ucDcUsageRecalc = 0;
           break;
 
-          case DC_CALIB_DC_L:     //Калибровка коэффициента вычета. Точка N. Соотв. Квычета. мл. байт  0x40  "@"
+          case DC_CALIB_DC_L:       //Калибровка коэффициента вычета. Точка N. Соотв. Квычета. мл. байт  0x40  "@"
             memcpy( &(gl_ush_calib_dc_dc[ gl_acInputBuffer[2]]), &gl_acInputBuffer[3], 1);
-            gl_cFlashParamDcCalibUsage = 0xFF;
+            //reset setting: при старте брать DC_START, а перевычислять на лету
+            gl_ucDcUsageStartSetting = 0;
+            gl_ucDcUsageRecalc = 0;
           break;
 
-          case DC_CALIB_DC_H:     //Калибровка коэффициента вычета. Точка N. Соотв. Квычета. ст. байт  0x41  "A"
+          case DC_CALIB_DC_H:       //Калибровка коэффициента вычета. Точка N. Соотв. Квычета. ст. байт  0x41  "A"
             memcpy( ( ( char *)&gl_ush_calib_dc_dc[ gl_acInputBuffer[2]])+1, &gl_acInputBuffer[3], 1);
-            gl_cFlashParamDcCalibUsage = 0xFF;
+            //reset setting: при старте брать DC_START, а перевычислять на лету
+            gl_ucDcUsageStartSetting = 0;
+            gl_ucDcUsageRecalc = 0;
           break;
 
-          case DC_CALIB_USAGE:    //Калибровка коэффициента вычета. Использование                      0x42  "B"
-            if( gl_acInputBuffer[2] == 0x00) {
-              //заказываем использовать калибровку.
+          case DC_SETTINGS_START:   //Настройки использования коэффициента вычета: что брать при старте: 0=брать стартовый dc: REST=брать из таблицы калибровки
+            gl_ucDcUsageStartSetting = gl_acInputBuffer[2];
+            if( gl_ucDcUsageStartSetting > 1) gl_ucDcUsageStartSetting = 0;
 
-              //сперва надо проверить что есть хоть одна точка в таблице калибровки
+            if( gl_ucDcUsageStartSetting == 1) {
+              //на использование таблицы можно переключиться только если есть хотя бы одна валидная точка
+              //сортируем таблицу по возрастанию температуры
+                for( i=0; i<10; i++) {
+                  for( j=0; j<10; j++) {
 
+                    if( gl_ac_calib_dc_t[ j] > gl_ac_calib_dc_t[ j + 1]) {
+                      c_t = gl_ac_calib_dc_t[ j + 1];
+                      gl_ac_calib_dc_t[ j + 1] = gl_ac_calib_dc_t[ j];
+                      gl_ac_calib_dc_t[ j] = c_t;
+
+                      ush_dc = gl_ush_calib_dc_dc[ j + 1];
+                      gl_ush_calib_dc_dc[ j + 1] = gl_ush_calib_dc_dc[ j];
+                      gl_ush_calib_dc_dc[ j] = ush_dc;
+                    }
+                  }
+                }
+
+                //если не найдём - то будем использовать стартовый DC
+                gl_ucDcUsageStartSetting = 0;
+
+                //ищем хотя бы одну не default-точку
+                for( i=0; i<11; i++) {
+                  if( gl_ac_calib_dc_t[i] != 0xFF && gl_ush_calib_dc_dc[i] != 0xFFFF) {
+                    //нашли! значит можно использовать калибровку!
+                    gl_ucDcUsageStartSetting = 1;
+                    break;
+                  }
+                }
+              }
+            }
+            gl_nSentAddParamIndex = DC_SETTINGS_START;
+          break;
+
+          case DC_SETTINGS_RECALC:  //Настройки использования коэффициента вычета: как переопределять в процессе работы
+                                    //  0=перевычисление на лету
+                                    //  1=перевычисление ступенчатая
+                                    //  2=калибровка сглаженная
+                                    //  3=ручной режим
+
+            if( gl_acInputBuffer[2] > 3) gl_acInputBuffer[2] = 0;
+
+            if( gl_acInputBuffer[2] == 1 || gl_ucDcUsageRecalc == 2) {
+              //на использование таблицы можно переключиться только если есть хотя бы две валидных точки
               //сортируем таблицу по возрастанию температуры
               for( i=0; i<10; i++) {
                 for( j=0; j<10; j++) {
@@ -426,54 +482,37 @@ void processIncomingCommand( void) {
                 }
               }
 
-              //ищем первую не default-точку
+              c_cnt = 0;
+              //ищем хотя бы две не default-точку
               for( i=0; i<11; i++) {
                 if( gl_ac_calib_dc_t[i] != 0xFF && gl_ush_calib_dc_dc[i] != 0xFFFF) {
-                  gl_cFlashParamDcCalibUsage = gl_acInputBuffer[2];
-                  break;
+                  if( ++c_cnt == 2) {
+                    //нашли! значит можно переключаться
+                    gl_ucDcUsageRecalc = gl_acInputBuffer[2];
+                    break;
+                  }
                 }
               }
-
             }
             else {
-              //заказываем работать с коэффициентом вычета кроме калибровки
-              gl_cFlashParamDcCalibUsage = gl_acInputBuffer[2];
+              //если заказывают manual regime или перевычисление
+              gl_ucDcUsageRecalc = gl_acInputBuffer[2];
             }
-
-            gl_nSentAddParamIndex = DC_CALIB_USAGE;
+            gl_nSentAddParamIndex = DC_SETTINGS_RECALC;
           break;
-        }
+
+          case DC_SETTINGS_RECALC_PERIOD:
+            gl_ushDcUsageRecalcPeriod = gl_acInputBuffer[2] + ( ( ( unsigned short) gl_acInputBuffer[3]) << 8);
+            gl_nSentAddParamIndex = DC_SETTINGS_RECALC_PERIOD;
+          break;
+
       break;
 
+      //**************************************************************************** REQ
       case MC_COMMAND_REQ:
         switch( gl_acInputBuffer[1]) {
-          case AMPLITUDE:   gl_nSentAddParamIndex = AMPLITUDE;    break;
-          case TACT_CODE:   gl_nSentAddParamIndex = TACT_CODE;    break;
-          case M_COEFF:     gl_nSentAddParamIndex = M_COEFF;      break;
-          case STARTMODE:   gl_nSentAddParamIndex = STARTMODE;    break;
-          case DECCOEFF:    gl_nSentAddParamIndex = DECCOEFF;     break;
-          case CONTROL_I1:  gl_nSentAddParamIndex = CONTROL_I1;   break;
-          case CONTROL_I2:  gl_nSentAddParamIndex = CONTROL_I2;   break;
-          case CONTROL_AA:  gl_nSentAddParamIndex = CONTROL_AA;   break;
-
-          case HV_APPLY_COUNT_SET:  gl_nSentAddParamIndex = HV_APPLY_COUNT_SET;   break;
-          case HV_APPLY_COUNT_TR:   gl_nSentAddParamIndex = HV_APPLY_COUNT_TR;    break;
-          case HV_APPLY_DURAT_SET:  gl_nSentAddParamIndex = HV_APPLY_DURAT_SET;   break;
-          case HV_APPLY_PACKS:      gl_nSentAddParamIndex = HV_APPLY_PACKS;       break;
-
-          case SIGNCOEFF:   gl_nSentAddParamIndex = SIGNCOEFF;    break;
-          case DEVNUM:      gl_nSentAddParamIndex = DEVNUM;       break;
-
-          case DATE_Y:      gl_nSentAddParamIndex = DATE_Y;       break;
-          case DATE_M:      gl_nSentAddParamIndex = DATE_M;       break;
-          case DATE_D:      gl_nSentAddParamIndex = DATE_D;       break;
-
-          case ORG:         gl_nSentAddParamIndex = ORG_B1;       break;
-
-          case VERSION:
-            //printf("DBG: PIC: REQ: VER\n");
-            //putchar_nocheck( '3');
-            gl_nSentAddParamIndex = VERSION;
+          case ORG:
+            gl_nSentAddParamIndex = ORG_B1;
           break;
 
           case SLG_ADDITIONAL_PARAM_LIST_ELEMENT: //элемент списка выдаваемых наружу аналоговых (доп.) параметров
@@ -497,14 +536,6 @@ void processIncomingCommand( void) {
             }
           break;
 
-          case PH_SH_USAGE: //калибровка фазового сдвига. использование
-            gl_nSentAddParamIndex = PH_SH_USAGE;
-          break;
-
-          case PH_SH_CURRENT_VAL: //калибровка фазового сдвига. текущее выставленное значение фазового сдвига.
-            gl_nSentAddParamIndex = PH_SH_CURRENT_VAL;
-          break;
-
           case DC_CALIB_T:        //калибровка коэффициента вычета. температура
             if( gl_acInputBuffer[2] >= 0 && gl_acInputBuffer[2] < 11) {
               gl_nSentAddParamIndex = DC_CALIB_T;
@@ -526,15 +557,14 @@ void processIncomingCommand( void) {
             }
           break;
 
-          case DC_CALIB_USAGE:    //калибровка коэффициента вычета. использование
-            gl_nSentAddParamIndex = DC_CALIB_USAGE;
-          break;
 
+          default:
+            gl_nSentAddParamIndex = gl_acInputBuffer[1];
         }
       break;
 
 
-
+      //**************************************************************************** REST
       case MC_COMMAND_ACT_SWC_DW_DNDU_OUTPUT: //Within async mode switch DN,DU or dW output
         if( gl_b_SyncMode == 1) {
           if( gl_acInputBuffer[1] == 0) gl_chAngleOutput = 0; //switch to dW output
@@ -612,13 +642,15 @@ void processIncomingCommand( void) {
 
 
       case MC_COMMAND_ACT_RESET_DC_CALIB:
-        gl_cFlashParamDcCalibUsage = 0x00;
+        //ставим стартовое - брать START
+        //использование калибровки - перевычисление
+        gl_ucDcUsageStartSetting= 0;
+        gl_ucDcUsageRecalc = 0;
+
         for( i=0; i<11; i++) {
           gl_ac_calib_dc_t[i] = 0xFF;
           gl_ush_calib_dc_dc[i] = 0xFFFF;
         }
-
-        gl_nSentAddParamIndex = DC_CALIB_USAGE;
       break;
 
       case MC_COMMAND_ACT_LASER_OFF:    //Laser turn off

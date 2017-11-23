@@ -29,7 +29,7 @@ void check_params_p4( void);
 #define ADDR_TACT_CODE        0xF002
 #define ADDR_M_COEFF          0xF004
 #define ADDR_START_MODE       0xF006
-#define ADDR_DEC_COEFF        0xF008
+#define ADDR_DEC_COEFF_START  0xF008
 #define ADDR_LOCK_DEV         0xF00A
 #define ADDR_LAST_RULA        0xF00C
 #define ADDR_LAST_RULM        0xF00E
@@ -127,7 +127,10 @@ void check_params_p4( void);
 #define ADDR_DC_CALIB_DC10      0xF67E
 #define ADDR_DC_CALIB_T11       0xF680
 #define ADDR_DC_CALIB_DC11      0xF682
-#define ADDR_DC_CALIB_USAGE     0xF684
+#define ADDR_DC_START_DEF       0xF684
+#define ADDR_DC_RECALC          0xF686
+#define ADDR_DC_RECALC_PERIOD   0xF688
+
 
 // ADDRESSES FOR FLASH-STORED PARAMS. PAGE 5
 // 2017.08.08 - у нас всего 4 страницы??

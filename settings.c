@@ -13,7 +13,7 @@ extern unsigned short gl_ush_flashParamAmplitudeCode;       //амплитуда колебани
 extern unsigned short gl_ush_flashParamTactCode;            //код такта ошумления
 extern unsigned short gl_ush_flashParamMCoeff;              //коэффициент ошумления
 extern unsigned short gl_ush_flashParamStartMode;           //стартовая мода системы регулировки периметра
-extern unsigned short gl_ush_flashParamDecCoeff;            //коэффициент вычета
+extern unsigned short gl_ush_flashParamStartDecCoeff;       //СТАРТОВЫЙ коэффициент вычета
 extern unsigned short gl_ush_flashLockDev;                  //флаг блокировки устройства
 
 extern unsigned short gl_ush_flashParamI1min;               //контрольное значение тока поджига I1
@@ -54,10 +54,10 @@ extern char gl_cFlashParamPhaseShiftUsage;        //флаг использования фазового 
 //калибровка коэффициента вычета
 extern char gl_ac_calib_dc_t[];                   //массив точек температур калибровки коэффициента вычета
 extern unsigned short gl_ush_calib_dc_dc[];       //массив точек значений коэффициента вычета, соответствующих температурам, описанным выше
-extern char gl_cFlashParamDcCalibUsage;           //флаг использования калибровки коэффициента вычета:
-                                                  //      0 - используется калибровка
-                                                  //      1 - используется перевычисление
-                                                  //      REST (предпочитаю 0xFF) - не используется
+extern unsigned char  gl_ucDcUsageStartSetting;   //флаг что брать в качестве стартового Квычета: 0=DC_START; REST=по таблице калибровки;
+extern unsigned char  gl_ucDcUsageRecalc;         //флаг как перевычислять Квычета: 0=перевычисление;1=по таблице калибровки(грубо);2=по таблице калибровки(аппрокс);REST=ручной режим;
+extern unsigned short gl_ushDcUsageRecalcPeriod;  //период перевычисления Квычета (в секундах)
+
 
 void load_params_p1( void) {
   //код амплитуды
@@ -68,14 +68,14 @@ void load_params_p1( void) {
   if( flashEE_load_short( ADDR_M_COEFF, &gl_ush_flashParamMCoeff))           gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   //Начальная мода
   if( flashEE_load_short( ADDR_START_MODE, &gl_ush_flashParamStartMode))     gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
-  //коэффициент вычета
-  if( flashEE_load_short( ADDR_DEC_COEFF, &gl_ush_flashParamDecCoeff))       gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  //Стартовый коэффициент вычета
+  if( flashEE_load_short( ADDR_DEC_COEFF_START, &gl_ush_flashParamStartDecCoeff))  gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   //флаг блокировки устройства
   if( flashEE_load_short( ADDR_LOCK_DEV, &gl_ush_flashLockDev))              gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   //последнее RULA
-  if( flashEE_load_short( ADDR_LAST_RULA, &gl_ushFlashParamLastRULA)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  if( flashEE_load_short( ADDR_LAST_RULA, &gl_ushFlashParamLastRULA))        gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
   //последнее RULM
-  if( flashEE_load_short( ADDR_LAST_RULM, &gl_ushFlashParamLastRULM)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  if( flashEE_load_short( ADDR_LAST_RULM, &gl_ushFlashParamLastRULM))        gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
 
 
 #ifdef DEBUG
@@ -84,7 +84,7 @@ void load_params_p1( void) {
   printf("DBG:   Base Tact Code: 0x%04x (%04d)\n", gl_ush_flashParamTactCode,       gl_ush_flashParamTactCode);       //код такта подставки
   printf("DBG:   M Coefficient:  0x%04x (%04d)\n", gl_ush_flashParamMCoeff,         gl_ush_flashParamMCoeff);         //коэффициент М
   printf("DBG:   Start Mode:     0x%04x (%04d)\n", gl_ush_flashParamStartMode,      gl_ush_flashParamStartMode);      //Начальная мода
-  printf("DBG:   Dec. Coeff:     0x%04x (%04d)\n", gl_ush_flashParamDecCoeff,       gl_ush_flashParamDecCoeff);       //коэффициент вычета
+  printf("DBG:   StartDecCoeff:  0x%04x (%04d)\n", gl_ush_flashParamStartDecCoeff,  gl_ush_flashParamStartDecCoeff);  //коэффициент вычета
   printf("DBG:   Dev Lock:       0x%04x (%04d)\n", gl_ush_flashLockDev,             gl_ush_flashLockDev);             //флаг блокировки устройства
   printf("DBG:   Last RULA:      0x%04x (%04d)\n", gl_ushFlashParamLastRULA, gl_ushFlashParamLastRULA);   //последнее RULA
   printf("DBG:   Last RULM:      0x%04x (%04d)\n", gl_ushFlashParamLastRULM, gl_ushFlashParamLastRULM);   //последнее RULM
@@ -389,8 +389,16 @@ void load_params_p4( void) {
   if( flashEE_load_short( ADDR_DC_CALIB_DC11, ( unsigned short *) &gl_ush_calib_dc_dc[10])) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
 
 
-  //Использование калибровки коэффициента вычета
-  if( flashEE_load_short( ADDR_DC_CALIB_USAGE, ( unsigned short *) &gl_cFlashParamDcCalibUsage)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  //Что брать в качестве стартового Квычета
+  if( flashEE_load_short( ADDR_DC_START_DEF, ( unsigned short *) &ush_tmp)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ucDcUsageStartSetting = ush_tmp & 0xFF;
+
+  //Как переопределять Квычета в процессе работы
+  if( flashEE_load_short( ADDR_DC_RECALC, ( unsigned short *) &ush_tmp)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
+  gl_ucDcUsageRecalc = ush_tmp & 0xFF;
+
+  //Период перевычисления Квычета
+  if( flashEE_load_short( ADDR_DC_RECALC_PERIOD, ( unsigned short *) &gl_ushDcUsageRecalcPeriod)) gl_c_EmergencyCode = ERROR_FLASH_LOAD_PARAMS_FAIL;
 
 #ifdef DEBUG
   printf("DBG:load_params_p4()\n");
@@ -418,7 +426,10 @@ void load_params_p4( void) {
     printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",     i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
     printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n",   i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
   }
-  printf("DBG:  DC_CALIB_USAGE:       0x%04x (%04d)\n\n",     gl_cFlashParamDcCalibUsage, gl_cFlashParamDcCalibUsage);
+
+  printf("DBG:  ADDR_DC_START_DEF:    0x%04x (%04d)\n\n",     gl_ucDcUsageStartSetting, gl_ucDcUsageStartSetting);
+  printf("DBG:  ADDR_DC_RECALC:       0x%04x (%04d)\n\n",     gl_ucDcUsageRecalc, gl_ucDcUsageRecalc);
+  printf("DBG:  ADDR_DC_RECALC_PERIOD:0x%04x (%04d)\n\n",     gl_ushDcUsageRecalcPeriod, gl_ushDcUsageRecalcPeriod);
 
   printf("DBG:load_params_p4(): out\n");
 #endif
@@ -445,8 +456,8 @@ void check_params_p1( void) {
 
   //коэффициент вычета
   //default значение 0,004 УТОЧНИТЬ!
-  if( gl_ush_flashParamDecCoeff == 0xffff)
-    gl_ush_flashParamDecCoeff = ( int) ( 0.004 * 65535.);
+  if( gl_ush_flashParamStartDecCoeff == 0xffff)
+    gl_ush_flashParamStartDecCoeff = ( int) ( 0.004 * 655350.);
 
   //флаг блокировки устройства
   //default значение 0 - режим разработчиков
@@ -455,7 +466,7 @@ void check_params_p1( void) {
 
   //последний RULA [0-4095]
   if( gl_ushFlashParamLastRULA > 4095) {
-    gl_ushFlashParamLastRULA = 0;
+    gl_ushFlashParamLastRULA = 3000;
   }
 
   //последний RULM [0-4095]
@@ -469,7 +480,7 @@ void check_params_p1( void) {
   printf("DBG:   Base Tact Code: 0x%04x (%04d)\n", gl_ush_flashParamTactCode,       gl_ush_flashParamTactCode);       //код такта подставки
   printf("DBG:   M Coefficient:  0x%04x (%04d)\n", gl_ush_flashParamMCoeff,         gl_ush_flashParamMCoeff);         //коэффициент М
   printf("DBG:   Start Mode:     0x%04x (%04d)\n", gl_ush_flashParamStartMode,      gl_ush_flashParamStartMode);      //Начальная мода
-  printf("DBG:   Dec. Coeff:     0x%04x (%04d)\n", gl_ush_flashParamDecCoeff,       gl_ush_flashParamDecCoeff);       //коэффициент вычета
+  printf("DBG:   StartDecCoeff:  0x%04x (%04d)\n", gl_ush_flashParamStartDecCoeff,  gl_ush_flashParamStartDecCoeff);  //Начальный коэффициент вычета
   printf("DBG:   Dev Lock:       0x%04x (%04d)\n", gl_ush_flashLockDev,             gl_ush_flashLockDev);             //флаг блокировки устройства
 #endif
 }
@@ -649,6 +660,20 @@ void check_params_p4( void) {
   }
   */
 
+  //флаг использования фазового сдвига: 0 - используется, REST - ручной режим
+  if( gl_cFlashParamPhaseShiftUsage > 1) gl_cFlashParamPhaseShiftUsage = 0x01;
+
+  //флаг что брать в качестве стартового Квычета: 0=DC_START; REST=по таблице калибровки;
+  if( gl_ucDcUsageStartSetting > 1) gl_ucDcUsageStartSetting = 0x00;
+
+  //флаг как перевычислять Квычета: 0=перевычисление;1=по таблице калибровки(грубо);2=по таблице калибровки(аппрокс);REST=ручной режим;
+  if( gl_ucDcUsageRecalc > 3) gl_ucDcUsageRecalc = 0x00;
+
+  //период перевычисления Квычета (в секундах) (min 1 max 600)
+  if( gl_ushDcUsageRecalcPeriod < 1) gl_ushDcUsageRecalcPeriod = 1;
+  if( gl_ushDcUsageRecalcPeriod > 600) gl_ushDcUsageRecalcPeriod = 600;
+
+
 #ifdef DEBUG
   printf("DBG: check_params_p4(): add params list checked for the range. Here they are:\n");
   printf("DBG:   ADD_PARAM_LIST_01:     0x%04x (%04d)\n", gl_aushListOutputAddParams[0],  gl_aushListOutputAddParams[0]);  //список выдаваемых аналоговых (доп. параметров)
@@ -681,18 +706,62 @@ void check_params_p4( void) {
     printf("DBG:   ADDR_PHSH_CALIB_PHSH%d: 0x%04x (%04d)\n\n", i+1, gl_ac_calib_phsh_phsh[i], gl_ac_calib_phsh_phsh[i]);
   }
   printf("DBG:   flashParam_calibUsage:  0x%04x (%04d)\n", gl_cFlashParamPhaseShiftUsage, gl_cFlashParamPhaseShiftUsage);
+
+  printf("DBG: Dec coeff calibration parameters:\n");
+  for( i=0; i<11; i++) {
+    printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",     i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
+    printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n",   i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
+  }
+
+  printf("DBG:  ADDR_DC_START_DEF:    0x%04x (%04d)\n\n",     gl_ucDcUsageStartSetting, gl_ucDcUsageStartSetting);
+  printf("DBG:  ADDR_DC_RECALC:       0x%04x (%04d)\n\n",     gl_ucDcUsageRecalc, gl_ucDcUsageRecalc);
+  printf("DBG:  ADDR_DC_RECALC_PERIOD:0x%04x (%04d)\n\n",     gl_ushDcUsageRecalcPeriod, gl_ushDcUsageRecalcPeriod);
+
 #endif
 }
 
 void load_params( void) {
+
+#ifdef DEBUG
+  printf("DBG: blp1: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   load_params_p1();
+
+#ifdef DEBUG
+  printf("DBG: blp2: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   if( gl_c_EmergencyCode != ERROR_FLASH_LOAD_PARAMS_FAIL) load_params_p2();
+
+#ifdef DEBUG
+  printf("DBG: blp3: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   if( gl_c_EmergencyCode != ERROR_FLASH_LOAD_PARAMS_FAIL) load_params_p3();
+
+#ifdef DEBUG
+  printf("DBG: blp4: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   if( gl_c_EmergencyCode != ERROR_FLASH_LOAD_PARAMS_FAIL) load_params_p4();
 
+
+
+#ifdef DEBUG
+  printf("DBG: bcp1: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   check_params_p1();
+
+#ifdef DEBUG
+  printf("DBG: bcp2: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   check_params_p2();
+
+#ifdef DEBUG
+  printf("DBG: bcp3: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   check_params_p3();
+
+#ifdef DEBUG
+  printf("DBG: bcp4: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
+#endif
   check_params_p4();
 }
 
@@ -703,7 +772,7 @@ void save_params_p1( void) {
   printf("DBG:   Base Tact Code: 0x%04x (%04d)\n", gl_ush_flashParamTactCode,       gl_ush_flashParamTactCode);       //код такта подставки
   printf("DBG:   M Coefficient:  0x%04x (%04d)\n", gl_ush_flashParamMCoeff,         gl_ush_flashParamMCoeff);         //коэффициент М
   printf("DBG:   Start Mode:     0x%04x (%04d)\n", gl_ush_flashParamStartMode,      gl_ush_flashParamStartMode);      //Начальная мода
-  printf("DBG:   Dec. Coeff:     0x%04x (%04d)\n", gl_ush_flashParamDecCoeff,       gl_ush_flashParamDecCoeff);       //коэффициент вычета
+  printf("DBG:   StartDecCoeff:  0x%04x (%04d)\n", gl_ush_flashParamStartDecCoeff,  gl_ush_flashParamStartDecCoeff);  //Стартовый коэффициент вычета
   printf("DBG:   Dev Lock:       0x%04x (%04d)\n", gl_ush_flashLockDev,             gl_ush_flashLockDev);             //флаг блокировки устройства
   printf("DBG:   Last RULA:      0x%04x (%04d)\n", gl_ushFlashParamLastRULA, gl_ushFlashParamLastRULA);   //последнее RULA
   printf("DBG:   Last RULM:      0x%04x (%04d)\n", gl_ushFlashParamLastRULM, gl_ushFlashParamLastRULM);   //последнее RULM
@@ -730,7 +799,7 @@ void save_params_p1( void) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
-  if( flashEE_save_short( ADDR_DEC_COEFF, gl_ush_flashParamDecCoeff)) {
+  if( flashEE_save_short( ADDR_DEC_COEFF_START, gl_ush_flashParamStartDecCoeff)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
@@ -851,11 +920,22 @@ void save_params_p4( void) {
 
   printf("DBG: temperature calibration parameters:\n");
 
-  printf("DBG: phase shift calibration parameters:\n");
+  printf("DBG: Phase shift calibration parameters:\n");
   for( i=0; i<11; i++) {
-    printf("DBG:  ADDR_PHSH_CALIB_T%d:    0x%04x (%04d)\n",   i+1, gl_ac_calib_phsh_t[i], gl_ac_calib_phsh_t[i]);
-    printf("DBG:  ADDR_PHSH_CALIB_PHSH%d: 0x%04x (%04d)\n\n", i+1, gl_ac_calib_phsh_phsh[i], gl_ac_calib_phsh_phsh[i]);
+    printf("DBG:   ADDR_PHSH_CALIB_T%d:    0x%04x (%04d)\n",   i+1, gl_ac_calib_phsh_t[i], gl_ac_calib_phsh_t[i]);
+    printf("DBG:   ADDR_PHSH_CALIB_PHSH%d: 0x%04x (%04d)\n\n", i+1, gl_ac_calib_phsh_phsh[i], gl_ac_calib_phsh_phsh[i]);
   }
+  printf("DBG:   flashParam_calibUsage:  0x%04x (%04d)\n", gl_cFlashParamPhaseShiftUsage, gl_cFlashParamPhaseShiftUsage);
+
+  printf("DBG: Dec coeff calibration parameters:\n");
+  for( i=0; i<11; i++) {
+    printf("DBG:  ADDR_DC_CALIB_T%d:    0x%04x (%04d)\n",     i+1, gl_ac_calib_dc_t[i], gl_ac_calib_dc_t[i]);
+    printf("DBG:  ADDR_DC_CALIB_DC%d:   0x%04x (%04d)\n\n",   i+1, gl_ush_calib_dc_dc[i], gl_ush_calib_dc_dc[i]);
+  }
+
+  printf("DBG:  ADDR_DC_START_DEF:    0x%04x (%04d)\n\n",     gl_ucDcUsageStartSetting, gl_ucDcUsageStartSetting);
+  printf("DBG:  ADDR_DC_RECALC:       0x%04x (%04d)\n\n",     gl_ucDcUsageRecalc, gl_ucDcUsageRecalc);
+  printf("DBG:  ADDR_DC_RECALC_PERIOD:0x%04x (%04d)\n\n",     gl_ushDcUsageRecalcPeriod, gl_ushDcUsageRecalcPeriod);
 #endif
 
   if( flashEE_erase_page( ADDR_PAGE4)) {
@@ -944,11 +1024,23 @@ void save_params_p4( void) {
     }
   }
 
-  if( flashEE_save_short( ADDR_DC_CALIB_USAGE, ( unsigned short) gl_cFlashParamDcCalibUsage)) {
+  //Что брать в качестве стартового Квычета
+  if( flashEE_save_short( ADDR_DC_START_DEF, ( unsigned short ) gl_ucDcUsageStartSetting)) {
     gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
     return;
   }
 
+  //Как переопределять Квычета в процессе работы
+  if( flashEE_save_short( ADDR_DC_RECALC, ( unsigned short ) gl_ucDcUsageRecalc)) {
+    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
+    return;
+  }
+
+  //Период перевычисления Квычета
+  if( flashEE_save_short( ADDR_DC_RECALC_PERIOD, ( unsigned short ) gl_ushDcUsageRecalcPeriod)) {
+    gl_c_EmergencyCode = ERROR_FLASH_SAVE_PARAMS_FAIL;
+    return;
+  }
 }
 
 void save_params( void) {
