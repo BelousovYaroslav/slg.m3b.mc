@@ -71,6 +71,7 @@ extern int gl_snMeaningShift;                       //Amplitude control module: 
 extern long gl_lnMeaningSumm;                       //Amplitude control module: summ of amplitudes
 extern long gl_lnMeanImps;                          //Amplitude control module: mean (it's calculated shifted by 4 i.e. multiplied by 16)
 extern int  gl_nActiveRegulationT2;                 //Amplitude control module: amplitude active regulation T2 intersection
+extern char gl_cAmplRegulation;                     //Amplitude control module: amplitude regulation state (0=manual, 1=soft regulation,2=active regulation)
 
 //Флаги
 extern char gl_b_SyncMode;                          //флаг режима работы гироскопа:   0=синхр. 1=асинхр.
@@ -181,6 +182,7 @@ void processIncomingCommand( void) {
             gl_lnMeanImps = 0;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
@@ -192,6 +194,7 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = TACT_CODE;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
 
@@ -205,6 +208,7 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = M_COEFF;
 
             //включаем флаг активной регулировки амплитуды (перенастройка амплитуды)
+            gl_cAmplRegulation = 2;
             gl_nActiveRegulationT2 = T2VAL;
             if( gl_nActiveRegulationT2 == 0) gl_nActiveRegulationT2 = 1;
           break;
@@ -425,31 +429,30 @@ void processIncomingCommand( void) {
             if( gl_ucDcUsageStartSetting == 1) {
               //на использование таблицы можно переключиться только если есть хотя бы одна валидная точка
               //сортируем таблицу по возрастанию температуры
-                for( i=0; i<10; i++) {
-                  for( j=0; j<10; j++) {
+              for( i=0; i<10; i++) {
+                for( j=0; j<10; j++) {
 
-                    if( gl_ac_calib_dc_t[ j] > gl_ac_calib_dc_t[ j + 1]) {
-                      c_t = gl_ac_calib_dc_t[ j + 1];
-                      gl_ac_calib_dc_t[ j + 1] = gl_ac_calib_dc_t[ j];
-                      gl_ac_calib_dc_t[ j] = c_t;
+                  if( gl_ac_calib_dc_t[ j] > gl_ac_calib_dc_t[ j + 1]) {
+                    c_t = gl_ac_calib_dc_t[ j + 1];
+                    gl_ac_calib_dc_t[ j + 1] = gl_ac_calib_dc_t[ j];
+                    gl_ac_calib_dc_t[ j] = c_t;
 
-                      ush_dc = gl_ush_calib_dc_dc[ j + 1];
-                      gl_ush_calib_dc_dc[ j + 1] = gl_ush_calib_dc_dc[ j];
-                      gl_ush_calib_dc_dc[ j] = ush_dc;
-                    }
+                    ush_dc = gl_ush_calib_dc_dc[ j + 1];
+                    gl_ush_calib_dc_dc[ j + 1] = gl_ush_calib_dc_dc[ j];
+                    gl_ush_calib_dc_dc[ j] = ush_dc;
                   }
                 }
+              }
 
-                //если не найдём - то будем использовать стартовый DC
-                gl_ucDcUsageStartSetting = 0;
+              //если не найдём - то будем использовать стартовый DC
+              gl_ucDcUsageStartSetting = 0;
 
-                //ищем хотя бы одну не default-точку
-                for( i=0; i<11; i++) {
-                  if( gl_ac_calib_dc_t[i] != 0xFF && gl_ush_calib_dc_dc[i] != 0xFFFF) {
-                    //нашли! значит можно использовать калибровку!
-                    gl_ucDcUsageStartSetting = 1;
-                    break;
-                  }
+              //ищем хотя бы одну не default-точку
+              for( i=0; i<11; i++) {
+                if( gl_ac_calib_dc_t[i] != 0xFF && gl_ush_calib_dc_dc[i] != 0xFFFF) {
+                  //нашли! значит можно использовать калибровку!
+                  gl_ucDcUsageStartSetting = 1;
+                  break;
                 }
               }
             }
@@ -506,6 +509,18 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = DC_SETTINGS_RECALC_PERIOD;
           break;
 
+          case RULA:    //RULA
+            if( gl_cAmplRegulation == 0) {
+              gl_un_RULAControl = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+            }
+          break;
+
+          case AMPL_HOLD_ACTIVE:
+            if( gl_acInputBuffer[2] >= 0 && gl_acInputBuffer[2] <= 2) {
+              gl_cAmplRegulation = gl_acInputBuffer[2];
+            }
+          break;
+        }
       break;
 
       //**************************************************************************** REQ
