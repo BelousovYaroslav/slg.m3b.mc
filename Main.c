@@ -1761,7 +1761,7 @@ void main() {
     }
 
 #ifdef DEBUG
-    printf("VALUE=%.6f  ", gl_ushCurrentDecCoeff / 65535.);
+    printf("VALUE=%.6f  ", gl_ushCurrentDecCoeff / 655350.);
     printf("passed\n");
 #endif
 

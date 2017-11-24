@@ -455,9 +455,9 @@ void check_params_p1( void) {
     gl_ush_flashParamStartMode = 125;
 
   //коэффициент вычета
-  //default значение 0,004 УТОЧНИТЬ!
+  //default значение 0,04 УТОЧНИТЬ!
   if( gl_ush_flashParamStartDecCoeff == 0xffff)
-    gl_ush_flashParamStartDecCoeff = ( int) ( 0.004 * 655350.);
+    gl_ush_flashParamStartDecCoeff = ( int) ( 0.04 * 655350.);
 
   //флаг блокировки устройства
   //default значение 0 - режим разработчиков

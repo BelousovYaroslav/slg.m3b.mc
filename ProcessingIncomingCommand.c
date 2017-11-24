@@ -504,6 +504,10 @@ void processIncomingCommand( void) {
             gl_nSentAddParamIndex = DC_SETTINGS_RECALC;
           break;
 
+          case DECCOEFF_START:
+            gl_ush_flashParamStartDecCoeff = gl_acInputBuffer[2] + ( ( ( short) gl_acInputBuffer[3]) << 8);
+          break;
+
           case DC_SETTINGS_RECALC_PERIOD:
             gl_ushDcUsageRecalcPeriod = gl_acInputBuffer[2] + ( ( ( unsigned short) gl_acInputBuffer[3]) << 8);
             gl_nSentAddParamIndex = DC_SETTINGS_RECALC_PERIOD;
