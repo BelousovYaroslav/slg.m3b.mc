@@ -246,3 +246,71 @@ void deadloop_no_firing( int nError) {
 
   } //"мертвый" while
 }
+
+void deadloop_current_unstable( void) {
+  //ОБРАБОТКА deadloop ПАДЕНИЯ ТОКА
+
+  //выставляем код ошибки
+  gl_c_EmergencyCode = ERROR_CURRENT_LOST;
+
+  //высылка настроечных параметров
+  gl_nSentAddParamIndex = AMPLITUDE;      send_pack( gl_ush_flashParamAmplitudeCode);
+  gl_nSentAddParamIndex = TACT_CODE;      send_pack( gl_ush_flashParamTactCode);
+  gl_nSentAddParamIndex = M_COEFF;        send_pack( gl_ush_flashParamMCoeff);
+  gl_nSentAddParamIndex = STARTMODE;      send_pack( gl_ush_flashParamStartMode);
+  gl_nSentAddParamIndex = DECCOEFF_START; send_pack( gl_ush_flashParamStartDecCoeff);
+  gl_nSentAddParamIndex = CONTROL_I1;     send_pack( gl_ush_flashParamI1min);
+  gl_nSentAddParamIndex = CONTROL_I2;     send_pack( gl_ush_flashParamI2min);
+  gl_nSentAddParamIndex = CONTROL_AA;     send_pack( gl_ush_flashParamAmplAngMin1);
+  gl_nSentAddParamIndex = DECCOEFF_START; send_pack( gl_ush_flashParamStartDecCoeff);
+  gl_nSentAddParamIndex = SIGNCOEFF;      send_pack( gl_ush_flashParamSignCoeff);
+  gl_nSentAddParamIndex = VERSION;        send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
+
+  gl_n_prT1VAL = T1VAL;
+  while( 1) {
+    //пауза 0,1 секунда
+    pause( 327);
+
+    gl_ssh_SA_time = ( T1LD + gl_n_prT1VAL - T1VAL) % T1LD;
+    gl_n_prT1VAL = T1VAL;
+
+    //**********************************************************************
+    // Обработка буфера входящих команд
+    //**********************************************************************
+    processIncomingCommand();
+
+    //выдача настроечных параметров
+    gl_nSentAddParamIndex = AMPLITUDE;      send_pack( gl_ush_flashParamAmplitudeCode);
+    gl_nSentAddParamIndex = TACT_CODE;      send_pack( gl_ush_flashParamTactCode);
+    gl_nSentAddParamIndex = M_COEFF;        send_pack( gl_ush_flashParamMCoeff);
+    gl_nSentAddParamIndex = STARTMODE;      send_pack( gl_ush_flashParamStartMode);
+    gl_nSentAddParamIndex = DECCOEFF_START; send_pack( gl_ush_flashParamStartDecCoeff);
+    gl_nSentAddParamIndex = CONTROL_I1;     send_pack( gl_ush_flashParamI1min);
+    gl_nSentAddParamIndex = CONTROL_I2;     send_pack( gl_ush_flashParamI2min);
+    gl_nSentAddParamIndex = CONTROL_AA;     send_pack( gl_ush_flashParamAmplAngMin1);
+
+    gl_nSentAddParamIndex = SIGNCOEFF;    send_pack( gl_ush_flashParamSignCoeff);
+    gl_nSentAddParamIndex = DEVNUM;       send_pack( gl_ush_flashParamDeviceId);
+    gl_nSentAddParamIndex = DATE_Y;       send_pack( gl_ush_flashParamDateYear);
+    gl_nSentAddParamIndex = DATE_M;       send_pack( gl_ush_flashParamDateMonth);
+    gl_nSentAddParamIndex = DATE_D;       send_pack( gl_ush_flashParamDateDay);
+    gl_nSentAddParamIndex = ORG_B1;       send_pack( gl_ac_flashParamOrg[ 0]);
+    gl_nSentAddParamIndex = ORG_B2;       send_pack( gl_ac_flashParamOrg[ 1]);
+    gl_nSentAddParamIndex = ORG_B3;       send_pack( gl_ac_flashParamOrg[ 2]);
+    gl_nSentAddParamIndex = ORG_B4;       send_pack( gl_ac_flashParamOrg[ 3]);
+    gl_nSentAddParamIndex = ORG_B5;       send_pack( gl_ac_flashParamOrg[ 4]);
+    gl_nSentAddParamIndex = ORG_B6;       send_pack( gl_ac_flashParamOrg[ 5]);
+    gl_nSentAddParamIndex = ORG_B7;       send_pack( gl_ac_flashParamOrg[ 6]);
+    gl_nSentAddParamIndex = ORG_B8;       send_pack( gl_ac_flashParamOrg[ 7]);
+    gl_nSentAddParamIndex = ORG_B9;       send_pack( gl_ac_flashParamOrg[ 8]);
+    gl_nSentAddParamIndex = ORG_B10;      send_pack( gl_ac_flashParamOrg[ 9]);
+    gl_nSentAddParamIndex = ORG_B11;      send_pack( gl_ac_flashParamOrg[ 10]);
+    gl_nSentAddParamIndex = ORG_B12;      send_pack( gl_ac_flashParamOrg[ 11]);
+    gl_nSentAddParamIndex = ORG_B13;      send_pack( gl_ac_flashParamOrg[ 12]);
+    gl_nSentAddParamIndex = ORG_B14;      send_pack( gl_ac_flashParamOrg[ 13]);
+    gl_nSentAddParamIndex = ORG_B15;      send_pack( gl_ac_flashParamOrg[ 14]);
+    gl_nSentAddParamIndex = ORG_B16;      send_pack( gl_ac_flashParamOrg[ 15]);
+    gl_nSentAddParamIndex = VERSION;      send_pack( ( ( VERSION_MINOR * 16) << 8) + (VERSION_MAJOR * 16 + VERSION_MIDDLE));
+
+  } //"мертвый" while
+}

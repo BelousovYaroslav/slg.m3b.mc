@@ -193,6 +193,14 @@ double gl_dbl_Usumm = 0.;
 double gl_dbl_Omega;
 
 
+//Система контроля просадок токов
+int gl_nLaserCurrentUnstableT2 = 0;   //последний момент времени когда была просадка тока (отслеживается, и если за 5 сек от первой не наберётся максимума - сбросится)
+int gl_nLaserCurrentUnstableCnt = 0;  //счётчик просадок тока в течении последних 5 сек
+
+//Система контроля просадок вибрации
+int gl_nVibrationWatchT2 = 0;         //последний момент времени когда была просадка вибрации (отслеживается, и если за 5 сек от первой не наберётся максимума - сбросится)
+int gl_nVibrationWatchCnt = 0;        //счётчик просадок вибрации в течении последних 5 сек
+
 #define BIT_0 1
 #define BIT_1 2
 #define BIT_2 4
@@ -1018,6 +1026,9 @@ int getNextAddParamDescriptorToSendFromList() {
 }
 
 void main() {
+  int n_SA_check_time;
+  int n_prT2VAL;
+
   int time = 20000;
   int i;
   char lb, hb;
@@ -1780,7 +1791,7 @@ void main() {
   gl_nMeanDecCoeffCounter = 0;
 
   gl_un_PrevT2DecCoeffCalc = T2VAL;
-
+  n_prT2VAL = T2VAL;
 
   //FAKE ('VERACITY DATA' flag on)
   gl_n_PerimeterReset = 1;
@@ -1856,7 +1867,8 @@ void main() {
   printf("DBG: gl_c_EmergencyCode=0x%02X\n", gl_c_EmergencyCode);
 #endif
 
-        testPike();
+        n_prT2VAL = T2VAL;
+        //testPike();
 
         //отсечка получения TA_SA (для вычисления длительности)
         gl_ssh_SA_time = ( T1LD + gl_n_prT1VAL - T1VAL) % T1LD;
@@ -2464,6 +2476,84 @@ void main() {
 
         gl_ssh_angle_inc_prev = gl_ssh_angle_inc;
 
+
+        // ************************************************************************************
+        // 2018-03-15
+        // слежение за вибрацией
+        // ************************************************************************************
+        if( gl_bManualLaserOff == 0 && gl_nADCChannel == ADC_CHANNEL_UTD1) {
+          //если мы не выключили лазер вручную
+
+          //отслеживаем 5 сек с последнего момента просадки вибрации
+          if( gl_nVibrationWatchT2 != 0) {
+            if( ( gl_nVibrationWatchT2 + T2LD - T2VAL) >= 163840) { //5sec (*32kHz = 163840)
+              //5сек прошло, максимума ошибок не набрали - сбрасываем флаг и счётчик
+              gl_nVibrationWatchT2 = 0;
+              gl_nVibrationWatchCnt = 0;
+            }
+          }
+
+          if( gl_ush_MeanImpulses < 100) {
+            //отловили ситуацию когда вибрация очень мала
+            gl_nVibrationWatchT2 = T2VAL; //запоминаем время (по прошествии 5 сек от него мы сбросим счётчик ошибок)
+            gl_nVibrationWatchCnt++;      //увеличиваем счётчик ошибок
+
+            if( gl_nVibrationWatchCnt >= 20) {
+              //не более чем за последние 5 сек, мы набрали 20 или более непонятных малых амплитуд колебаний - выключаем ток
+
+              GP4DAT |= 1 << (16 + 0);      //ONHV       (p4.0) = 1
+              GP4SET = 1 << (16 + 0);       //дублёр
+              deadloop_no_tact( ERROR_VIBRATION_LOST);
+            }
+          }
+        }
+
+        // ************************************************************************************
+        // 2018-03-15
+        // слежение за разрядными токами (потерей горения)
+        // ************************************************************************************
+        if( gl_bManualLaserOff == 0 && gl_nADCChannel == ADC_CHANNEL_CNTRPC) {
+          //если мы не выключили руками лазер, и только что переключили канал АЦП на измерение Vrpc (а значит перед этим промерили I1 и I2)
+
+          //отслеживаем 5 сек с последнего момента просадки токов
+          if( gl_nLaserCurrentUnstableT2 != 0) {
+            if( ( gl_nLaserCurrentUnstableT2 + T2LD - T2VAL) >= 163840) { //5sec (*32kHz = 163840)
+              //5сек прошло, просадок не было - сбрасываем флаги и счётчик
+              gl_nLaserCurrentUnstableT2 = 0;
+              gl_nLaserCurrentUnstableCnt = 0;
+            }
+          }
+
+          //чтобы токи лежали в диапазоне 0.4mA +-10% = [0.36;0.44]
+          //отсчёты АЦП должны быть:
+          //1912 --> 0.439844 mA
+          //2184 --> 0.360156 mA
+
+          //чтобы токи лежали в диапазоне 0.5mA +-10% = [0.45;0.55]
+          //отсчёты АЦП должны быть:
+          //1537 --> 0.549707 mA
+          //1877 --> 0.450098 mA
+
+          if( gl_ssh_current_1 >= 1537 && gl_ssh_current_1 <= 1877 &&
+              gl_ssh_current_2 >= 1537 && gl_ssh_current_2 <= 1877) {
+              //с токами всё в порядке
+          }
+          else {
+            //отловили ситуацию когда просел ток
+            gl_nLaserCurrentUnstableT2 = T2VAL; //запоминаем время (по прошествии 5 сек от него мы сбросим счётчик ошибок)
+            gl_nLaserCurrentUnstableCnt++;      //увеличиваем счётчик ошибок
+
+            if( gl_nLaserCurrentUnstableCnt >= 5) {
+              //мы набрали 5 или более "выпадов" за 5 сек - выключаем ток
+
+              GP4DAT |= 1 << (16 + 0);      //ONHV       (p4.0) = 1
+              GP4SET = 1 << (16 + 0);      //дублёр
+              deadloop_current_unstable();
+            }
+          }
+        }
+
+
         // ************************************************************************************
         // 2010-04-22
         //автоматическая перестройка периметра
@@ -2772,12 +2862,11 @@ void main() {
       //если линия сигнала SA в низком уровне - то как только она поднимется начнется новый необработанный такт
       gl_b_SA_Processed = 0;
 
-      /*
       //проверка тактирования
-      ush_SA_check_time = ( T1LD + gl_n_prT1VAL - T1VAL) % T1LD;
+      n_SA_check_time = ( T2LD + n_prT2VAL - T2VAL) % T2LD;
 
       //2 sec = 32768 * 2.0 = 65536
-      if( ush_SA_check_time > 65536) {
+      if( n_SA_check_time > 65536) {
         //пропало тактирование
 
         #ifdef DEBUG
@@ -2789,7 +2878,6 @@ void main() {
 
         deadloop_no_tact( ERROR_TACT_SIGNAL_LOST);
       }
-      */
     }
   }
 }
